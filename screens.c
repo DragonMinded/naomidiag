@@ -418,18 +418,21 @@ unsigned int monitor_tests(state_t *state, int reinit)
         case 6:
         {
             // Cross hatch pattern, for convergence and focus adjustments.
-            int hjump = (video_width() - CROSS_WEIGHT) / CROSS_HORIZONTAL_STEPS;
-            int vjump = (video_height() - CROSS_WEIGHT) / CROSS_VERTICAL_STEPS;
+            int chors = video_is_vertical() ? CROSS_VERTICAL_STEPS : CROSS_HORIZONTAL_STEPS;
+            int cvers = video_is_vertical() ? CROSS_HORIZONTAL_STEPS : CROSS_VERTICAL_STEPS;
+
+            int hjump = (video_width() - CROSS_WEIGHT) / chors;
+            int vjump = (video_height() - CROSS_WEIGHT) / cvers;
 
             // Because the above might not divide evenly, we need to bump random lines to make sure
             // we line up the last line on the far right of the screen.
-            int herror = video_width() - ((hjump * CROSS_HORIZONTAL_STEPS) + CROSS_WEIGHT);
-            int verror = video_height() - ((vjump * CROSS_VERTICAL_STEPS) + CROSS_WEIGHT);
+            int herror = video_width() - ((hjump * chors) + CROSS_WEIGHT);
+            int verror = video_height() - ((vjump * cvers) + CROSS_WEIGHT);
 
             int accum = 0;
             int bump = 0;
 
-            for (int hloc = 0; hloc < (CROSS_HORIZONTAL_STEPS + 1); hloc++)
+            for (int hloc = 0; hloc < (chors + 1); hloc++)
             {
                 int left = hloc * hjump;
                 int right = left + CROSS_WEIGHT;
@@ -437,10 +440,10 @@ unsigned int monitor_tests(state_t *state, int reinit)
                 int bottom = video_height();
 
                 accum += herror;
-                while (accum >= CROSS_HORIZONTAL_STEPS)
+                while (accum >= chors)
                 {
                     bump++;
-                    accum -= CROSS_HORIZONTAL_STEPS;
+                    accum -= chors;
                 }
 
                 ta_draw_rectangle(left + bump, top, right + bump, bottom, rgb(255, 255, 255));
@@ -449,7 +452,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
             accum = 0;
             bump = 0;
 
-            for (int vloc = 0; vloc < (CROSS_VERTICAL_STEPS + 1); vloc++)
+            for (int vloc = 0; vloc < (cvers + 1); vloc++)
             {
                 int left = 0;
                 int right = video_width();
@@ -457,10 +460,10 @@ unsigned int monitor_tests(state_t *state, int reinit)
                 int bottom = top + CROSS_WEIGHT;
 
                 accum += verror;
-                while (accum >= CROSS_VERTICAL_STEPS)
+                while (accum >= cvers)
                 {
                     bump++;
-                    accum -= CROSS_VERTICAL_STEPS;
+                    accum -= cvers;
                 }
 
                 ta_draw_rectangle(left, top + bump, right, bottom + bump, rgb(255, 255, 255));
