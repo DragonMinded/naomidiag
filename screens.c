@@ -87,7 +87,7 @@ entry_t entries[] = {
         NULL,
     },
     {
-        "BIOS Test Menu",
+        "System Test Menu",
         SCREEN_SYSTEM_MENU,
         system_menu,
     },
