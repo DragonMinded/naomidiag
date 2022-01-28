@@ -608,7 +608,7 @@ unsigned int system_menu(state_t *state, int reinit)
 
 unsigned int reboot_system(state_t *state, int reinit)
 {
-    // TODO: Figure out how BIOS reboots system, do that here.
+    call_unmanaged((void (*)())0xA0000000);
     return SCREEN_REBOOT_SYSTEM;
 }
 
