@@ -17,14 +17,21 @@ typedef struct
 
 typedef struct
 {
+    texture_description_t *up;
+    texture_description_t *down;
+    texture_description_t *cursor;
+    texture_description_t *pswoff;
+    texture_description_t *pswon;
+} sprites_t;
+
+typedef struct
+{
     eeprom_t *settings;
     double fps;
     double animation_counter;
     font_t *font_18pt;
     font_t *font_12pt;
-    texture_description_t *sprite_up;
-    texture_description_t *sprite_down;
-    texture_description_t *sprite_cursor;
+    sprites_t sprites;
     sounds_t sounds;
 } state_t;
 

@@ -60,7 +60,7 @@ void repeat_init(unsigned int pushed_state, int *repeat_count)
 
 #define ANALOG_DEAD_ZONE 8
 
-controls_t get_controls(state_t *state, int reinit)
+controls_t get_controls(state_t *state, int reinit, int full_separate)
 {
     static unsigned int oldaup[2] = { 0 };
     static unsigned int oldadown[2] = { 0 };
@@ -118,11 +118,25 @@ controls_t get_controls(state_t *state, int reinit)
     controls.test_pressed = 0;
     controls.service_pressed = 0;
 
-    if (pressed.test || pressed.psw1)
+    // Process separate controls.
+    controls.psw1 = 0;
+    controls.psw2 = 0;
+    controls.dipswitches = (held.dip1 ? 0x1 : 0x0) | (held.dip2 ? 0x2 : 0x0) | (held.dip3 ? 0x4 : 0x0) | (held.dip4 ? 0x8 : 0x0);
+
+    if (full_separate && held.psw1)
+    {
+        controls.psw1 = 1;
+    }
+    if (full_separate && held.psw2)
+    {
+        controls.psw2 = 1;
+    }
+
+    if (pressed.test || ((!full_separate) && pressed.psw1))
     {
         controls.test_pressed = 1;
     }
-    else if (pressed.player1.service || pressed.psw2 || (state->settings->system.players >= 2 && pressed.player2.service))
+    else if (pressed.player1.service || ((!full_separate) && pressed.psw2) || (state->settings->system.players >= 2 && pressed.player2.service))
     {
         controls.service_pressed = 1;
     }

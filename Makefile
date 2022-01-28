@@ -15,9 +15,11 @@ SRCS += dejavusans.ttf
 SRCS += scroll.raw
 
 # Graphics for cursor and up/down scroll indicators.
-SRCS += build/up.o
-SRCS += build/dn.o
-SRCS += build/cursor.o
+SRCS += up.png
+SRCS += dn.png
+SRCS += cursor.png
+SRCS += pswoff.png
+SRCS += pswon.png
 
 # Libraries we need to link against.
 LIBS += -lnaomisprite -lfreetype -lbz2 -lz -lpng16

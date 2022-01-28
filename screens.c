@@ -61,12 +61,12 @@ entry_t entries[] = {
         audio_tests,
     },
     {
-        "Input Tests",
+        "JVS Input Tests",
         SCREEN_INPUT_TESTS,
         input_tests,
     },
     {
-        "DIP Switch Tests",
+        "Filter Board Input Tests",
         SCREEN_DIP_TESTS,
         dip_tests,
     },
@@ -98,6 +98,18 @@ entry_t entries[] = {
     }
 };
 
+void ta_draw_rectangle(int left, int top, int right, int bottom, color_t color)
+{
+    vertex_t vertexes[] = {
+        { left, bottom, 1 },
+        { left, top, 1 },
+        { right, top, 1 },
+        { right, bottom, 1 },
+    };
+
+    ta_fill_box(TA_CMD_POLYGON_TYPE_TRANSPARENT, vertexes, color);
+}
+
 unsigned int main_menu(state_t *state, int reinit)
 {
     // Grab our configuration.
@@ -127,7 +139,7 @@ unsigned int main_menu(state_t *state, int reinit)
     unsigned int new_screen = SCREEN_MAIN_MENU;
 
     // Get our controls, including repeats.
-    controls_t controls = get_controls(state, reinit);
+    controls_t controls = get_controls(state, reinit, COMBINED_CONTROLS);
 
     if (controls.test_pressed || controls.start_pressed)
     {
@@ -215,7 +227,7 @@ unsigned int main_menu(state_t *state, int reinit)
 
     if (top > 0)
     {
-        sprite_draw_simple(video_width() / 2 - 10, 10 - scroll_offset, state->sprite_up);
+        sprite_draw_simple(video_width() / 2 - 10, 10 - scroll_offset, state->sprites.up);
     }
 
     for (unsigned int entry = top; entry < top + maxentries; entry++)
@@ -229,7 +241,7 @@ unsigned int main_menu(state_t *state, int reinit)
         // Draw cursor itself.
         if (entry == cursor)
         {
-            sprite_draw_simple(24, 24 + ((entry - top) * 21), state->sprite_cursor);
+            sprite_draw_simple(24, 24 + ((entry - top) * 21), state->sprites.cursor);
         }
 
         // Draw game, highlighted if it is selected.
@@ -238,7 +250,7 @@ unsigned int main_menu(state_t *state, int reinit)
 
     if ((top + maxentries) < menuentries)
     {
-        sprite_draw_simple(video_width() / 2 - 10, 24 + (maxentries * 21) + scroll_offset, state->sprite_down);
+        sprite_draw_simple(video_width() / 2 - 10, 24 + (maxentries * 21) + scroll_offset, state->sprites.down);
     }
 
     return new_screen;
@@ -273,7 +285,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
     unsigned int new_screen = SCREEN_MONITOR_TESTS;
 
     // Get our controls, including repeats.
-    controls_t controls = get_controls(state, reinit);
+    controls_t controls = get_controls(state, reinit, COMBINED_CONTROLS);
 
     if (controls.test_pressed || controls.start_pressed)
     {
@@ -341,13 +353,6 @@ unsigned int monitor_tests(state_t *state, int reinit)
         case 4:
         {
             // Pure color screens for purity/white balance adjustments.
-            vertex_t vertexes[] = {
-                { 0, video_height(), 1 },
-                { 0, 0, 1 },
-                { video_width(), 0, 1 },
-                { video_width(), video_height(), 1 },
-            };
-
             // Change these colors if you need to change what color is displayed on the screen.
             color_t colors[] = {
                 rgb(255, 255, 255),
@@ -356,7 +361,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
                 rgb(0, 0, 255),
             };
 
-            ta_fill_box(TA_CMD_POLYGON_TYPE_TRANSPARENT, vertexes, colors[screen - 1]);
+            ta_draw_rectangle(0, 0, video_width(), video_height(), colors[screen - 1]);
             break;
         }
         case 5:
@@ -394,13 +399,6 @@ unsigned int monitor_tests(state_t *state, int reinit)
                     int top = GRADIENT_SAFE_AREA + 24 + (color * height);
                     int bottom = top + height;
 
-                    vertex_t vertexes[] = {
-                        { left, bottom, 1 },
-                        { left, top, 1 },
-                        { right, top, 1 },
-                        { right, bottom, 1 },
-                    };
-
                     /* Calculate the box color, based on where it is on the screen. */
                     float percent = (float)(bar + 1) / (float)GRADIENT_STEPS;
                     color_t actual = {
@@ -411,7 +409,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
                     };
 
                     /* Draw it! */
-                    ta_fill_box(TA_CMD_POLYGON_TYPE_TRANSPARENT, vertexes, actual);
+                    ta_draw_rectangle(left, top, right, bottom, actual);
                 }
             }
 
@@ -445,14 +443,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
                     accum -= CROSS_HORIZONTAL_STEPS;
                 }
 
-                vertex_t vertexes[] = {
-                    { left + bump, bottom, 1 },
-                    { left + bump, top, 1 },
-                    { right + bump, top, 1 },
-                    { right + bump, bottom, 1 },
-                };
-
-                ta_fill_box(TA_CMD_POLYGON_TYPE_TRANSPARENT, vertexes, rgb(255, 255, 255));
+                ta_draw_rectangle(left + bump, top, right + bump, bottom, rgb(255, 255, 255));
             }
 
             accum = 0;
@@ -472,14 +463,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
                     accum -= CROSS_VERTICAL_STEPS;
                 }
 
-                vertex_t vertexes[] = {
-                    { left, bottom + bump, 1 },
-                    { left, top + bump, 1 },
-                    { right, top + bump, 1 },
-                    { right, bottom + bump, 1 },
-                };
-
-                ta_fill_box(TA_CMD_POLYGON_TYPE_TRANSPARENT, vertexes, rgb(255, 255, 255));
+                ta_draw_rectangle(left, top + bump, right, bottom + bump, rgb(255, 255, 255));
             }
 
             break;
@@ -515,15 +499,76 @@ unsigned int input_tests(state_t *state, int reinit)
     return new_screen;
 }
 
+#define DIP_WIDTH 16
+#define DIP_HEIGHT 44
+#define DIP_SPACING 6
+#define DIP_BORDER 4
+#define DIP_NUB 16
+
 unsigned int dip_tests(state_t *state, int reinit)
 {
-    // TODO: Figure out how to read DIP switches, display them.
-    if (reinit)
+    // If we need to switch screens.
+    unsigned int new_screen = SCREEN_DIP_TESTS;
+
+    // Get our controls, in raw mode since we are testing filter board inputs.
+    controls_t controls = get_controls(state, reinit, SEPARATE_CONTROLS);
+
+    if ((controls.psw1 && controls.psw2) || controls.start_pressed || controls.test_pressed)
     {
+        // Exit out of the dip switch test screen.
+        new_screen = SCREEN_MAIN_MENU;
     }
 
-    // If we need to switch screens.
-    unsigned int new_screen = SCREEN_MAIN_MENU;
+    char *instructions[] = {
+        "Press PSW1 and PSW2 simultaneously to exit.",
+        "",
+        "Alternatively, press either start or test to exit.",
+    };
+
+    for (int i = 0; i < sizeof(instructions) / sizeof(instructions[0]); i++)
+    {
+        font_metrics_t metrics = font_get_text_metrics(state->font_12pt, instructions[i]);
+        ta_draw_text((video_width() - metrics.width) / 2, 22 + (14 * i), state->font_12pt, rgb(255, 255, 255), instructions[i]);
+    }
+
+    // Draw state of the current front panel switches.
+    font_metrics_t metrics = font_get_text_metrics(state->font_18pt, "PSW2");
+    ta_draw_text(64 + ((64 - metrics.width) / 2), 128, state->font_18pt, rgb(255, 255, 255), "PSW2");
+    sprite_draw_simple(64, 160, controls.psw2 ? state->sprites.pswon : state->sprites.pswoff);
+
+    metrics = font_get_text_metrics(state->font_18pt, "PSW1");
+    ta_draw_text(192 + ((64 - metrics.width) / 2), 128, state->font_18pt, rgb(255, 255, 255), "PSW1");
+    sprite_draw_simple(192, 160, controls.psw1 ? state->sprites.pswon : state->sprites.pswoff);
+
+    // Draw state of the current front panel DIP switches.
+    metrics = font_get_text_metrics(state->font_18pt, "DIPSW");
+    ta_draw_text(320 + ((((4 * DIP_WIDTH) + (5 * DIP_SPACING) + (2 * DIP_BORDER)) - metrics.width) / 2), 128, state->font_18pt, rgb(255, 255, 255), "DIPSW");
+    ta_draw_rectangle(320, 160, 320 + (4 * DIP_WIDTH) + (5 * DIP_SPACING) + (2 * DIP_BORDER), 160 + (2 * DIP_BORDER) + (2 * DIP_SPACING) + DIP_HEIGHT, rgb(0, 0, 128));
+    ta_draw_rectangle(320 + DIP_BORDER, 160 + DIP_BORDER, 320 + (4 * DIP_WIDTH) + (5 * DIP_SPACING) + (DIP_BORDER), 160 + (DIP_BORDER) + (2 * DIP_SPACING) + DIP_HEIGHT, rgb(200, 200, 200));
+
+    for (int i = 0; i < 4; i++)
+    {
+        int left = 320 + DIP_BORDER + DIP_SPACING + (i * (DIP_SPACING + DIP_WIDTH));
+        int right = left + DIP_WIDTH;
+        int top = 160 + DIP_BORDER + DIP_SPACING;
+        int bottom = top + DIP_HEIGHT;
+
+        ta_draw_rectangle(left, top, right, bottom, rgb(32, 32, 32));
+
+        color_t color;
+        if ((1 << i) & controls.dipswitches)
+        {
+            bottom = top + DIP_NUB;
+            color = rgb(0, 0, 255);
+        }
+        else
+        {
+            top = bottom - DIP_NUB;
+            color = rgb(0, 0, 128);
+        }
+
+        ta_draw_rectangle(left, top, right, bottom, color);
+    }
 
     return new_screen;
 }
@@ -595,7 +640,7 @@ void draw_screen(state_t *state)
                     break;
                 }
             }
-            
+
             if (!found)
             {
                 // Should never happen, but still, whatever.

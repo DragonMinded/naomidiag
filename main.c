@@ -23,6 +23,12 @@ extern void *dn_png_data;
 extern unsigned int cursor_png_width;
 extern unsigned int cursor_png_height;
 extern void *cursor_png_data;
+extern unsigned int pswoff_png_width;
+extern unsigned int pswoff_png_height;
+extern void *pswoff_png_data;
+extern unsigned int pswon_png_width;
+extern unsigned int pswon_png_height;
+extern void *pswon_png_data;
 
 void main()
 {
@@ -53,9 +59,11 @@ void main()
     font_set_size(state.font_12pt, 12);
 
     // Attach our sprites
-    state.sprite_up = ta_texture_desc_malloc_direct(up_png_width, up_png_data, TA_TEXTUREMODE_ARGB1555);
-    state.sprite_down = ta_texture_desc_malloc_direct(dn_png_width, dn_png_data, TA_TEXTUREMODE_ARGB1555);
-    state.sprite_cursor = ta_texture_desc_malloc_direct(cursor_png_width, cursor_png_data, TA_TEXTUREMODE_ARGB1555);
+    state.sprites.up = ta_texture_desc_malloc_direct(up_png_width, up_png_data, TA_TEXTUREMODE_ARGB1555);
+    state.sprites.down = ta_texture_desc_malloc_direct(dn_png_width, dn_png_data, TA_TEXTUREMODE_ARGB1555);
+    state.sprites.cursor = ta_texture_desc_malloc_direct(cursor_png_width, cursor_png_data, TA_TEXTUREMODE_ARGB1555);
+    state.sprites.pswoff = ta_texture_desc_malloc_direct(pswoff_png_width, pswoff_png_data, TA_TEXTUREMODE_ARGB1555);
+    state.sprites.pswon = ta_texture_desc_malloc_direct(pswon_png_width, pswon_png_data, TA_TEXTUREMODE_ARGB1555);
 
     // FPS calculation for debugging.
     double fps_value = 60.0;
