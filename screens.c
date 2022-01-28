@@ -590,15 +590,229 @@ unsigned int eeprom_tests(state_t *state, int reinit)
     return new_screen;
 }
 
+unsigned int walking_0s(unsigned int startaddr, unsigned int size)
+{
+    // Check for stuck data bits.
+    uint8_t patterns[8] = { 0xFE, 0xFD, 0xFB, 0xF7, 0xEF, 0xDF, 0xBF, 0x7F };
+
+    for (unsigned int addr = startaddr; addr < startaddr + size; addr++)
+    {
+        volatile uint8_t *loc = (volatile uint8_t *)addr;
+
+        for (int i = 0; i < 8; i++)
+        {
+            *loc = patterns[i];
+            if ((*loc) != patterns[i])
+            {
+                return addr;
+            }
+        }
+    }
+
+    return 0;
+}
+
+unsigned int walking_1s(unsigned int startaddr, unsigned int size)
+{
+    // Check for stuck data bits.
+    uint8_t patterns[8] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
+
+    for (unsigned int addr = startaddr; addr < startaddr + size; addr++)
+    {
+        volatile uint8_t *loc = (volatile uint8_t *)addr;
+
+        for (int i = 0; i < 8; i++)
+        {
+            *loc = patterns[i];
+            if ((*loc) != patterns[i])
+            {
+                return addr;
+            }
+        }
+    }
+
+    return 0;
+}
+
+unsigned int device_test(unsigned int startaddr, unsigned int size)
+{
+    // Check to make sure something can be stored in each byte.
+    uint8_t pattern = 5;
+    for (unsigned int addr = startaddr; addr < startaddr + size; addr++)
+    {
+        volatile uint8_t *loc = (volatile uint8_t *)addr;
+        *loc = pattern;
+        pattern++;
+    }
+
+    pattern = 5;
+    for (unsigned int addr = startaddr; addr < startaddr + size; addr++)
+    {
+        volatile uint8_t *loc = (volatile uint8_t *)addr;
+        if (*loc != pattern)
+        {
+            return addr;
+        }
+        pattern++;
+    }
+
+    return 0;
+}
+
+unsigned int address_test(unsigned int startaddr, unsigned int size)
+{
+    // Check for address bits stuck low.
+    for (unsigned int offset = 1; offset < size; offset <<= 1)
+    {
+        volatile uint8_t *loc = (volatile uint8_t *)(startaddr + offset);
+        *loc = 0xAA;
+    }
+
+    // Set the low address to a sentinel, so we can walk up and set values
+    // at each address line high to another and compare against this value.
+    volatile uint8_t *lowloc = (volatile uint8_t *)startaddr;
+    *lowloc = 0xAA;
+
+    for (unsigned int offset = 1; offset < size; offset <<= 1)
+    {
+        volatile uint8_t *loc = (volatile uint8_t *)(startaddr + offset);
+        *loc = 0x55;
+
+        if (*lowloc != 0xAA)
+        {
+            return startaddr + offset;
+        }
+    }
+
+    // Check for address bits stuck high.
+    for (unsigned int offset = 1; offset < size; offset <<= 1)
+    {
+        volatile uint8_t *loc = (volatile uint8_t *)(startaddr + offset);
+        *loc = 0xAA;
+    }
+
+    // Set the low address to a sentinel, so we can walk up and get values
+    // at each address line high to another and compare against this value.
+    *lowloc = 0x55;
+
+    for (unsigned int offset = 1; offset < size; offset <<= 1)
+    {
+        volatile uint8_t *loc = (volatile uint8_t *)(startaddr + offset);
+        if (*loc != 0xAA)
+        {
+            return startaddr + offset;
+        }
+    }
+
+    return 0;
+}
+
 unsigned int sram_tests(state_t *state, int reinit)
 {
-    // TODO: Walking 1s, walking 0s, address tests.
+    // The test we are currently running. This should really be a thread but
+    // I don't think it's going to take long enough to test. Maybe if we ever
+    // have a system RAM test this can be made threaded?
+    static int whichtest = -1;
+
+    // The result of each test. All F's means not run, All 0's means it passed
+    // and any other value is the memory address it failed on.
+    static unsigned int w1saddr = 0xFFFFFFFF;
+    static unsigned int w0saddr = 0xFFFFFFFF;
+    static unsigned int addraddr = 0xFFFFFFFF;
+    static unsigned int dataaddr = 0xFFFFFFFF;
+
+    // Re-initialize the test;
     if (reinit)
     {
+        whichtest = -1;
+        w1saddr = 0xFFFFFFFF;
+        w0saddr = 0xFFFFFFFF;
+        addraddr = 0xFFFFFFFF;
+        dataaddr = 0xFFFFFFFF;
     }
 
     // If we need to switch screens.
-    unsigned int new_screen = SCREEN_MAIN_MENU;
+    unsigned int new_screen = SCREEN_SRAM_TESTS;
+
+    controls_t controls = get_controls(state, reinit, SEPARATE_CONTROLS);
+
+    if (controls.test_pressed || controls.start_pressed)
+    {
+        // Exit out of the monitor test screen.
+        new_screen = SCREEN_MAIN_MENU;
+    }
+
+    switch(whichtest)
+    {
+        case -1:
+        {
+            // Just display something on the screen.
+            whichtest++;
+            break;
+        }
+        case 0:
+        {
+            whichtest++;
+            w1saddr = walking_1s(SRAM_BASE, SRAM_SIZE);
+            break;
+        }
+        case 1:
+        {
+            whichtest++;
+            w0saddr = walking_0s(SRAM_BASE, SRAM_SIZE);
+            break;
+        }
+        case 2:
+        {
+            whichtest++;
+            addraddr = address_test(SRAM_BASE, SRAM_SIZE);
+            break;
+        }
+        case 3:
+        {
+            whichtest++;
+            dataaddr = device_test(SRAM_BASE, SRAM_SIZE);
+            break;
+        }
+    }
+
+    // Display instructions.
+    char *instructions[] = {
+        "Press either start or test to exit.",
+    };
+
+    for (int i = 0; i < sizeof(instructions) / sizeof(instructions[0]); i++)
+    {
+        font_metrics_t metrics = font_get_text_metrics(state->font_12pt, instructions[i]);
+        ta_draw_text((video_width() - metrics.width) / 2, 22 + (14 * i), state->font_12pt, rgb(255, 255, 255), instructions[i]);
+    }
+
+    unsigned int results[4] = {w1saddr, w0saddr, addraddr, dataaddr};
+    char *titles[4] = {"Walking 1s", "Walking 0s", "Address Bus", "Device"};
+
+    for (int i = 0; i < (sizeof(results) / sizeof(results[0])); i++)
+    {
+        ta_draw_text(64, 128 + (24 * i), state->font_18pt, rgb(255, 255, 255), "%s Test...", titles[i]);
+
+        switch(results[i])
+        {
+            case 0x0:
+            {
+                ta_draw_text(300, 128 + (24 * i), state->font_18pt, rgb(0, 255, 0), "PASSED");
+                break;
+            }
+            case 0xFFFFFFFF:
+            {
+                ta_draw_text(300, 128 + (24 * i), state->font_18pt, rgb(255, 255, 0), "RUNNING");
+                break;
+            }
+            default:
+            {
+                ta_draw_text(300, 128 + (24 * i), state->font_18pt, rgb(255, 0, 0), "FAILED AT 0x%08X", results[i]);
+                break;
+            }
+        }
+    }
 
     return new_screen;
 }
