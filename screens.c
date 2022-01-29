@@ -2,9 +2,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include <naomi/video.h>
 #include <naomi/ta.h>
 #include <naomi/audio.h>
+#include <naomi/maple.h>
 #include <naomi/system.h>
 #include <naomi/font.h>
 #include <naomi/sprite/sprite.h>
@@ -108,6 +110,19 @@ void ta_draw_rectangle(int left, int top, int right, int bottom, color_t color)
     };
 
     ta_fill_box(TA_CMD_POLYGON_TYPE_TRANSPARENT, vertexes, color);
+}
+
+pthread_t spawn_background_task(void *(*task)(void * param), void *param)
+{
+    pthread_t thread;
+    pthread_create(&thread, NULL, task, param);
+    return thread;
+}
+
+void despawn_background_task(pthread_t thread)
+{
+    pthread_cancel(thread);
+    pthread_join(thread, NULL);
 }
 
 unsigned int main_menu(state_t *state, int reinit)
@@ -576,16 +591,340 @@ unsigned int dip_tests(state_t *state, int reinit)
     return new_screen;
 }
 
+typedef struct
+{
+    unsigned int state;
+    unsigned int exit;
+    state_t *sysstate;
+
+    pthread_t thread;
+    pthread_mutex_t mutex;
+} eeprom_test_t;
+
+#define EEPROM_TEST_STATE_INITIAL_READ 0
+#define EEPROM_TEST_STATE_INITIAL_WRITEBACK 1
+#define EEPROM_TEST_STATE_SECOND_READ 2
+#define EEPROM_TEST_STATE_SECOND_WRITEBACK 3
+#define EEPROM_TEST_STATE_FINISHED 4
+
+#define EEPROM_TEST_STATE_FAILED_INITIAL_READ 1000
+#define EEPROM_TEST_STATE_FAILED_INITIAL_WRITEBACK 1001
+#define EEPROM_TEST_STATE_FAILED_SECOND_READ 1002
+#define EEPROM_TEST_STATE_FAILED_SECOND_WRITEBACK 1003
+
+void *eeprom_test_thread(void *param)
+{
+    eeprom_test_t *eeprom_test = (eeprom_test_t *)param;
+
+    // We manually interleave control checks here since we cannot
+    // have an outstanding EEPROM read/write request and also try
+    // to read controls. The maple bus handles both and cannot do
+    // simultaneous outstanding requests.
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+    pthread_mutex_lock(&eeprom_test->mutex);
+    controls_t controls = get_controls(eeprom_test->sysstate, 1, COMBINED_CONTROLS);
+    if (controls.test_pressed || controls.start_pressed)
+    {
+        eeprom_test->exit = 1;
+    }
+    pthread_mutex_unlock(&eeprom_test->mutex);
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+    // First, try to read, bail out of it fails.
+    uint8_t eeprom[128];
+    if(maple_request_eeprom_read(eeprom) != 0)
+    {
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+        pthread_mutex_lock(&eeprom_test->mutex);
+        eeprom_test->state = EEPROM_TEST_STATE_FAILED_INITIAL_READ;
+        controls = get_controls(eeprom_test->sysstate, 0, COMBINED_CONTROLS);
+        if (controls.test_pressed || controls.start_pressed)
+        {
+            eeprom_test->exit = 1;
+        }
+        pthread_mutex_unlock(&eeprom_test->mutex);
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+        return NULL;
+    }
+
+    // Now, invert the whole thing and write it back.
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+    pthread_mutex_lock(&eeprom_test->mutex);
+    eeprom_test->state = EEPROM_TEST_STATE_INITIAL_WRITEBACK;
+    controls = get_controls(eeprom_test->sysstate, 0, COMBINED_CONTROLS);
+    if (controls.test_pressed || controls.start_pressed)
+    {
+        eeprom_test->exit = 1;
+    }
+    pthread_mutex_unlock(&eeprom_test->mutex);
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+    uint8_t inveeprom[128];
+    for (int i = 0; i < 128; i++)
+    {
+        inveeprom[i] = ~eeprom[i];
+    }
+
+    if(maple_request_eeprom_write(inveeprom) != 0)
+    {
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+        pthread_mutex_lock(&eeprom_test->mutex);
+        eeprom_test->state = EEPROM_TEST_STATE_FAILED_INITIAL_WRITEBACK;
+        controls = get_controls(eeprom_test->sysstate, 0, COMBINED_CONTROLS);
+        if (controls.test_pressed || controls.start_pressed)
+        {
+            eeprom_test->exit = 1;
+        }
+        pthread_mutex_unlock(&eeprom_test->mutex);
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+        return NULL;
+    }
+
+    // Now, try to read back that just written eeprom.
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+    pthread_mutex_lock(&eeprom_test->mutex);
+    eeprom_test->state = EEPROM_TEST_STATE_SECOND_READ;
+    controls = get_controls(eeprom_test->sysstate, 0, COMBINED_CONTROLS);
+    if (controls.test_pressed || controls.start_pressed)
+    {
+        eeprom_test->exit = 1;
+    }
+    pthread_mutex_unlock(&eeprom_test->mutex);
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+    uint8_t neweeprom[128];
+    if(maple_request_eeprom_read(neweeprom) != 0 || memcmp(inveeprom, neweeprom, 128) != 0)
+    {
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+        pthread_mutex_lock(&eeprom_test->mutex);
+        eeprom_test->state = EEPROM_TEST_STATE_FAILED_SECOND_READ;
+        controls = get_controls(eeprom_test->sysstate, 0, COMBINED_CONTROLS);
+        if (controls.test_pressed || controls.start_pressed)
+        {
+            eeprom_test->exit = 1;
+        }
+        pthread_mutex_unlock(&eeprom_test->mutex);
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+        return NULL;
+    }
+
+    // Now, try to write back the inverse of the inverse.
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+    pthread_mutex_lock(&eeprom_test->mutex);
+    eeprom_test->state = EEPROM_TEST_STATE_SECOND_WRITEBACK;
+    controls = get_controls(eeprom_test->sysstate, 0, COMBINED_CONTROLS);
+    if (controls.test_pressed || controls.start_pressed)
+    {
+        eeprom_test->exit = 1;
+    }
+    pthread_mutex_unlock(&eeprom_test->mutex);
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+    for (int i = 0; i < 128; i++)
+    {
+        inveeprom[i] = ~inveeprom[i];
+    }
+
+    if(maple_request_eeprom_write(inveeprom) != 0)
+    {
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+        pthread_mutex_lock(&eeprom_test->mutex);
+        eeprom_test->state = EEPROM_TEST_STATE_FAILED_SECOND_WRITEBACK;
+        controls = get_controls(eeprom_test->sysstate, 0, COMBINED_CONTROLS);
+        if (controls.test_pressed || controls.start_pressed)
+        {
+            eeprom_test->exit = 1;
+        }
+        pthread_mutex_unlock(&eeprom_test->mutex);
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+        return NULL;
+    }
+
+    // Include a second verify (even though we know we read properly) just for kicks.
+    if(maple_request_eeprom_read(neweeprom) != 0 || memcmp(eeprom, neweeprom, 128) != 0)
+    {
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+        pthread_mutex_lock(&eeprom_test->mutex);
+        eeprom_test->state = EEPROM_TEST_STATE_FINISHED;
+        controls = get_controls(eeprom_test->sysstate, 0, COMBINED_CONTROLS);
+        if (controls.test_pressed || controls.start_pressed)
+        {
+            eeprom_test->exit = 1;
+        }
+        pthread_mutex_unlock(&eeprom_test->mutex);
+        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+        return NULL;
+    };
+
+    // We passed!
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+    pthread_mutex_lock(&eeprom_test->mutex);
+    eeprom_test->state = EEPROM_TEST_STATE_FINISHED;
+    controls = get_controls(eeprom_test->sysstate, 0, COMBINED_CONTROLS);
+    if (controls.test_pressed || controls.start_pressed)
+    {
+        eeprom_test->exit = 1;
+    }
+    pthread_mutex_unlock(&eeprom_test->mutex);
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+    return NULL;
+}
+
+eeprom_test_t *start_eeprom_test(state_t *state)
+{
+    eeprom_test_t *eeprom_test = malloc(sizeof(eeprom_test_t));
+    eeprom_test->state = EEPROM_TEST_STATE_INITIAL_READ;
+    eeprom_test->exit = 0;
+    eeprom_test->sysstate = state;
+    pthread_mutex_init(&eeprom_test->mutex, NULL);
+    eeprom_test->thread = spawn_background_task(eeprom_test_thread, eeprom_test);
+    return eeprom_test;
+}
+
+void end_eeprom_test(eeprom_test_t *eeprom_test)
+{
+    despawn_background_task(eeprom_test->thread);
+    pthread_mutex_destroy(&eeprom_test->mutex);
+    free(eeprom_test);
+}
+
 unsigned int eeprom_tests(state_t *state, int reinit)
 {
-    // TODO: Read EEPROM, flip bits, write back, read again, verify
-    // flipped, flip again and write back original.
+    // The test we are currently running.
+    static eeprom_test_t *test = NULL;
+
+    // Re-initialize the test;
     if (reinit)
     {
+        if (test != NULL)
+        {
+            end_eeprom_test(test);
+            test = 0;
+        }
+
+        test = start_eeprom_test(state);
     }
 
     // If we need to switch screens.
-    unsigned int new_screen = SCREEN_MAIN_MENU;
+    unsigned int new_screen = SCREEN_EEPROM_TESTS;
+
+    // Display instructions.
+    char *instructions[] = {
+        "Press either start or test to exit.",
+    };
+
+    for (int i = 0; i < sizeof(instructions) / sizeof(instructions[0]); i++)
+    {
+        font_metrics_t metrics = font_get_text_metrics(state->font_12pt, instructions[i]);
+        ta_draw_text((video_width() - metrics.width) / 2, 22 + (14 * i), state->font_12pt, rgb(255, 255, 255), instructions[i]);
+    }
+
+    pthread_mutex_lock(&test->mutex);
+    unsigned int eepromstate = test->state;
+    unsigned int exitstate = test->exit;
+    pthread_mutex_unlock(&test->mutex);
+
+    if (
+        eepromstate == EEPROM_TEST_STATE_FINISHED ||
+        eepromstate == EEPROM_TEST_STATE_FAILED_SECOND_WRITEBACK ||
+        eepromstate == EEPROM_TEST_STATE_FAILED_SECOND_READ ||
+        eepromstate == EEPROM_TEST_STATE_FAILED_INITIAL_WRITEBACK ||
+        eepromstate == EEPROM_TEST_STATE_FAILED_INITIAL_READ
+    ) {
+        controls_t controls = get_controls(state, reinit, COMBINED_CONTROLS);
+
+        if (controls.test_pressed || controls.start_pressed)
+        {
+            // Exit out of the EEPROM test screen.
+            new_screen = SCREEN_MAIN_MENU;
+        }
+    }
+    else if (exitstate)
+    {
+        // Exit out of the EEPROM test screen.
+        new_screen = SCREEN_MAIN_MENU;
+    }
+
+    switch(eepromstate)
+    {
+        case EEPROM_TEST_STATE_FINISHED:
+        {
+            /* This is just a fallthrough to the next chunk of states. */
+        }
+        case EEPROM_TEST_STATE_SECOND_WRITEBACK:
+        case EEPROM_TEST_STATE_FAILED_SECOND_WRITEBACK:
+        {
+            ta_draw_text(64, 128 + 72, state->font_18pt, rgb(255, 255, 255), "Performing final writeback...");
+            if (eepromstate == EEPROM_TEST_STATE_FAILED_SECOND_WRITEBACK)
+            {
+                ta_draw_text(375, 128 + 72, state->font_18pt, rgb(255, 0, 0), "FAILED");
+            }
+            else if (eepromstate != EEPROM_TEST_STATE_SECOND_WRITEBACK)
+            {
+                ta_draw_text(375, 128 + 72, state->font_18pt, rgb(0, 255, 0), "PASSED");
+            }
+
+            // Fallthrough to display the previous state.
+        }
+        case EEPROM_TEST_STATE_SECOND_READ:
+        case EEPROM_TEST_STATE_FAILED_SECOND_READ:
+        {
+            ta_draw_text(64, 128 + 48, state->font_18pt, rgb(255, 255, 255), "Performing second read...");
+            if (eepromstate == EEPROM_TEST_STATE_FAILED_SECOND_READ)
+            {
+                ta_draw_text(375, 128 + 48, state->font_18pt, rgb(255, 0, 0), "FAILED");
+            }
+            else if (eepromstate != EEPROM_TEST_STATE_SECOND_READ)
+            {
+                ta_draw_text(375, 128 + 48, state->font_18pt, rgb(0, 255, 0), "PASSED");
+            }
+
+            // Fallthrough to display the previous state.
+        }
+        case EEPROM_TEST_STATE_INITIAL_WRITEBACK:
+        case EEPROM_TEST_STATE_FAILED_INITIAL_WRITEBACK:
+        {
+            ta_draw_text(64, 128 + 24, state->font_18pt, rgb(255, 255, 255), "Performing inverted writeback...");
+            if (eepromstate == EEPROM_TEST_STATE_FAILED_INITIAL_WRITEBACK)
+            {
+                ta_draw_text(375, 128 + 24, state->font_18pt, rgb(255, 0, 0), "FAILED");
+            }
+            else if (eepromstate != EEPROM_TEST_STATE_INITIAL_WRITEBACK)
+            {
+                ta_draw_text(375, 128 + 24, state->font_18pt, rgb(0, 255, 0), "PASSED");
+            }
+
+            // Fallthrough to display the previous state.
+        }
+        case EEPROM_TEST_STATE_INITIAL_READ:
+        case EEPROM_TEST_STATE_FAILED_INITIAL_READ:
+        {
+            ta_draw_text(64, 128, state->font_18pt, rgb(255, 255, 255), "Performing initial read...");
+            if (eepromstate == EEPROM_TEST_STATE_FAILED_INITIAL_READ)
+            {
+                ta_draw_text(375, 128, state->font_18pt, rgb(255, 0, 0), "FAILED");
+            }
+            else if (eepromstate != EEPROM_TEST_STATE_INITIAL_READ)
+            {
+                ta_draw_text(375, 128, state->font_18pt, rgb(0, 255, 0), "PASSED");
+            }
+
+            // No more states to display.
+            break;
+        }
+    }
+
+    if (new_screen != SCREEN_EEPROM_TESTS)
+    {
+        end_eeprom_test(test);
+        test = 0;
+    }
 
     return new_screen;
 }
@@ -707,73 +1046,111 @@ unsigned int address_test(unsigned int startaddr, unsigned int size)
     return 0;
 }
 
+typedef struct
+{
+    unsigned int startaddr;
+    unsigned int size;
+
+    pthread_t thread;
+    pthread_mutex_t mutex;
+
+    unsigned int w1saddr;
+    unsigned int w0saddr;
+    unsigned int addraddr;
+    unsigned int dataaddr;
+} memory_test_t;
+
+void *memtest_thread(void *param)
+{
+    memory_test_t *memtest = (memory_test_t *)param;
+    unsigned int result;
+
+    /* First, grab our range. */
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+    pthread_mutex_lock(&memtest->mutex);
+    unsigned int startaddr = memtest->startaddr;
+    unsigned int size = memtest->size;
+    pthread_mutex_unlock(&memtest->mutex);
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+    /* Now, run the four memory tests. */
+    result = walking_1s(startaddr, size);
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+    pthread_mutex_lock(&memtest->mutex);
+    memtest->w1saddr = result;
+    pthread_mutex_unlock(&memtest->mutex);
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+    result = walking_0s(startaddr, size);
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+    pthread_mutex_lock(&memtest->mutex);
+    memtest->w0saddr = result;
+    pthread_mutex_unlock(&memtest->mutex);
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+    result = address_test(startaddr, size);
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+    pthread_mutex_lock(&memtest->mutex);
+    memtest->addraddr = result;
+    pthread_mutex_unlock(&memtest->mutex);
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+    result = device_test(startaddr, size);
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+    pthread_mutex_lock(&memtest->mutex);
+    memtest->dataaddr = result;
+    pthread_mutex_unlock(&memtest->mutex);
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+
+    return NULL;
+}
+
+memory_test_t *start_memory_test(unsigned int startaddr, unsigned int size)
+{
+    memory_test_t *memtest = malloc(sizeof(memory_test_t));
+    memtest->startaddr = startaddr;
+    memtest->size = size;
+    memtest->w1saddr = 0xFFFFFFFF;
+    memtest->w0saddr = 0xFFFFFFFF;
+    memtest->addraddr = 0xFFFFFFFF;
+    memtest->dataaddr = 0xFFFFFFFF;
+    pthread_mutex_init(&memtest->mutex, NULL);
+    memtest->thread = spawn_background_task(memtest_thread, memtest);
+    return memtest;
+}
+
+void end_memory_test(memory_test_t *memtest)
+{
+    despawn_background_task(memtest->thread);
+    pthread_mutex_destroy(&memtest->mutex);
+    free(memtest);
+}
+
 unsigned int sram_tests(state_t *state, int reinit)
 {
-    // The test we are currently running. This should really be a thread but
-    // I don't think it's going to take long enough to test. Maybe if we ever
-    // have a system RAM test this can be made threaded?
-    static int whichtest = -1;
-
-    // The result of each test. All F's means not run, All 0's means it passed
-    // and any other value is the memory address it failed on.
-    static unsigned int w1saddr = 0xFFFFFFFF;
-    static unsigned int w0saddr = 0xFFFFFFFF;
-    static unsigned int addraddr = 0xFFFFFFFF;
-    static unsigned int dataaddr = 0xFFFFFFFF;
+    // The test we are currently running.
+    static memory_test_t *test = NULL;
 
     // Re-initialize the test;
     if (reinit)
     {
-        whichtest = -1;
-        w1saddr = 0xFFFFFFFF;
-        w0saddr = 0xFFFFFFFF;
-        addraddr = 0xFFFFFFFF;
-        dataaddr = 0xFFFFFFFF;
+        if (test != NULL)
+        {
+            end_memory_test(test);
+        }
+
+        test = start_memory_test(SRAM_BASE, SRAM_SIZE);
     }
 
     // If we need to switch screens.
     unsigned int new_screen = SCREEN_SRAM_TESTS;
 
-    controls_t controls = get_controls(state, reinit, SEPARATE_CONTROLS);
+    controls_t controls = get_controls(state, reinit, COMBINED_CONTROLS);
 
     if (controls.test_pressed || controls.start_pressed)
     {
-        // Exit out of the monitor test screen.
+        // Exit out of the SRAM test screen.
         new_screen = SCREEN_MAIN_MENU;
-    }
-
-    switch(whichtest)
-    {
-        case -1:
-        {
-            // Just display something on the screen.
-            whichtest++;
-            break;
-        }
-        case 0:
-        {
-            whichtest++;
-            w1saddr = walking_1s(SRAM_BASE, SRAM_SIZE);
-            break;
-        }
-        case 1:
-        {
-            whichtest++;
-            w0saddr = walking_0s(SRAM_BASE, SRAM_SIZE);
-            break;
-        }
-        case 2:
-        {
-            whichtest++;
-            addraddr = address_test(SRAM_BASE, SRAM_SIZE);
-            break;
-        }
-        case 3:
-        {
-            whichtest++;
-            dataaddr = device_test(SRAM_BASE, SRAM_SIZE);
-            break;
-        }
     }
 
     // Display instructions.
@@ -787,8 +1164,10 @@ unsigned int sram_tests(state_t *state, int reinit)
         ta_draw_text((video_width() - metrics.width) / 2, 22 + (14 * i), state->font_12pt, rgb(255, 255, 255), instructions[i]);
     }
 
-    unsigned int results[4] = {w1saddr, w0saddr, addraddr, dataaddr};
+    pthread_mutex_lock(&test->mutex);
+    unsigned int results[4] = {test->w1saddr, test->w0saddr, test->addraddr, test->dataaddr};
     char *titles[4] = {"Walking 1s", "Walking 0s", "Address Bus", "Device"};
+    pthread_mutex_unlock(&test->mutex);
 
     for (int i = 0; i < (sizeof(results) / sizeof(results[0])); i++)
     {
@@ -812,6 +1191,12 @@ unsigned int sram_tests(state_t *state, int reinit)
                 break;
             }
         }
+    }
+
+    if (new_screen != SCREEN_SRAM_TESTS)
+    {
+        end_memory_test(test);
+        test = 0;
     }
 
     return new_screen;

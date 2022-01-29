@@ -119,18 +119,9 @@ controls_t get_controls(state_t *state, int reinit, int full_separate)
     controls.service_pressed = 0;
 
     // Process separate controls.
-    controls.psw1 = 0;
-    controls.psw2 = 0;
+    controls.psw1 = held.psw1;
+    controls.psw2 = held.psw2;
     controls.dipswitches = (held.dip1 ? 0x1 : 0x0) | (held.dip2 ? 0x2 : 0x0) | (held.dip3 ? 0x4 : 0x0) | (held.dip4 ? 0x8 : 0x0);
-
-    if (full_separate && held.psw1)
-    {
-        controls.psw1 = 1;
-    }
-    if (full_separate && held.psw2)
-    {
-        controls.psw2 = 1;
-    }
 
     if (pressed.test || ((!full_separate) && pressed.psw1))
     {
