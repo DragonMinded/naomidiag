@@ -628,7 +628,17 @@ unsigned int analog_tests(state_t *state, int reinit)
     // Analog input tests. Show current, track full range for each control.
     if (reinit)
     {
-        memset(ranges, 0x80, sizeof(ranges));
+        // Make sure the ranges are such that any input will change it on first pass.
+        for (int player = 0; player < 2; player++)
+        {
+            for (int control = 0; control < 4; control++)
+            {
+                ranges[player][control][0] = 0xFF;
+                ranges[player][control][1] = 0x00;
+            }
+        }
+
+        // Start on the joystick screen.
         screen = 0;
     }
 
