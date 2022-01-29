@@ -718,22 +718,31 @@ unsigned int input_tests(state_t *state, int reinit)
         ta_draw_text((video_width() - metrics.width) / 2, 22 + (14 * i), state->font_12pt, rgb(255, 255, 255), instructions[i]);
     }
 
+    // Move the 2P below the 1P histogram if it is vertical.
+    int vstride = 0;
+    int hstride = 300;
+    if (video_is_vertical())
+    {
+        vstride = 300;
+        hstride = 0;
+    }
+
     // Display the control panel.
     for (int player = 0; player < 2; player++)
     {
         // Draw joystick as a crude D-pad.
-        ta_draw_button(state, CONTENT_HOFFSET + (300 * player), CONTENT_VOFFSET + 24, 0.5, heldcontrols[player][2] ? char2rgb('L') : rgb(128, 128, 128));
-        ta_draw_button(state, CONTENT_HOFFSET + 48 + (300 * player), CONTENT_VOFFSET + 24, 0.5, heldcontrols[player][3] ? char2rgb('R') : rgb(128, 128, 128));
-        ta_draw_button(state, CONTENT_HOFFSET + 24 + (300 * player), CONTENT_VOFFSET, 0.5, heldcontrols[player][0] ? char2rgb('U') : rgb(128, 128, 128));
-        ta_draw_button(state, CONTENT_HOFFSET + 24 + (300 * player), CONTENT_VOFFSET + 48, 0.5, heldcontrols[player][1] ? char2rgb('D') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + (hstride * player), CONTENT_VOFFSET + 24 + (vstride * player), 0.5, heldcontrols[player][2] ? char2rgb('L') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 48 + (hstride * player), CONTENT_VOFFSET + 24 + (vstride * player), 0.5, heldcontrols[player][3] ? char2rgb('R') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 24 + (hstride * player), CONTENT_VOFFSET + (vstride * player), 0.5, heldcontrols[player][0] ? char2rgb('U') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 24 + (hstride * player), CONTENT_VOFFSET + 48 + (vstride * player), 0.5, heldcontrols[player][1] ? char2rgb('D') : rgb(128, 128, 128));
 
         // Draw buttons.
-        ta_draw_button(state, CONTENT_HOFFSET + 90 + (300 * player), CONTENT_VOFFSET + 18, 0.5, heldcontrols[player][5] ? char2rgb('1') : rgb(128, 128, 128));
-        ta_draw_button(state, CONTENT_HOFFSET + 90 + 28 + (300 * player), CONTENT_VOFFSET + 10, 0.5, heldcontrols[player][6] ? char2rgb('2') : rgb(128, 128, 128));
-        ta_draw_button(state, CONTENT_HOFFSET + 90 + 56 + (300 * player), CONTENT_VOFFSET + 10, 0.5, heldcontrols[player][7] ? char2rgb('3') : rgb(128, 128, 128));
-        ta_draw_button(state, CONTENT_HOFFSET + 90 + (300 * player), CONTENT_VOFFSET + 30 + 18, 0.5, heldcontrols[player][8] ? char2rgb('4') : rgb(128, 128, 128));
-        ta_draw_button(state, CONTENT_HOFFSET + 90 + 28 + (300 * player), CONTENT_VOFFSET + 30 + 10, 0.5, heldcontrols[player][9] ? char2rgb('5') : rgb(128, 128, 128));
-        ta_draw_button(state, CONTENT_HOFFSET + 90 + 56 + (300 * player), CONTENT_VOFFSET + 30 + 10, 0.5, heldcontrols[player][10] ? char2rgb('6') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 90 + (hstride * player), CONTENT_VOFFSET + 18 + (vstride * player), 0.5, heldcontrols[player][5] ? char2rgb('1') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 118 + (hstride * player), CONTENT_VOFFSET + 10 + (vstride * player), 0.5, heldcontrols[player][6] ? char2rgb('2') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 146 + (hstride * player), CONTENT_VOFFSET + 10 + (vstride * player), 0.5, heldcontrols[player][7] ? char2rgb('3') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 90 + (hstride * player), CONTENT_VOFFSET + 48 + (vstride * player), 0.5, heldcontrols[player][8] ? char2rgb('4') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 118 + (hstride * player), CONTENT_VOFFSET + 40 + (vstride * player), 0.5, heldcontrols[player][9] ? char2rgb('5') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 146 + (hstride * player), CONTENT_VOFFSET + 40 + (vstride * player), 0.5, heldcontrols[player][10] ? char2rgb('6') : rgb(128, 128, 128));
     }
 
     // Display the start buttons separately, since they go in "the middle".
@@ -761,16 +770,21 @@ unsigned int input_tests(state_t *state, int reinit)
     int hist_top = CONTENT_VOFFSET + 160;
     int hist_left = CONTENT_HOFFSET;
 
+    // Its pretty difficult to fit this screen on a vertical setup, so the
+    // visuals will have to suffer a bit.
+    int stride = video_is_vertical() ? 7 : 8;
+    int bump = video_is_vertical() ? 256 : 64;
+
     for (int player = 0; player < 2; player++)
     {
         // Draw which player this is for.
-        ta_draw_text(hist_left, hist_top + (player * 64), state->font_18pt, rgb(255, 255, 255), "Player %d History", player + 1);
+        ta_draw_text(hist_left, hist_top + (player * bump), state->font_18pt, rgb(255, 255, 255), "Player %d History", player + 1);
 
         for (int i = 0; i < MAX_HIST_POSITIONS; i++)
         {
-            int left = hist_left + (8 * i);
-            int top = hist_top + (player * 64) + 30;
-            int right = left + 8;
+            int left = hist_left + (stride * i);
+            int top = hist_top + (player * bump) + 30;
+            int right = left + stride;
             int bottom = top + 8;
 
             // First, if this is where the current histogram position is, display a box.
