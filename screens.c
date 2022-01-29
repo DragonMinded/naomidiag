@@ -494,7 +494,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
 
 unsigned int audio_tests(state_t *state, int reinit)
 {
-    static unsigned int screen = 0;
+    static int screen = 0;
 
     if (reinit)
     {
