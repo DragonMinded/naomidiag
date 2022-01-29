@@ -13,6 +13,7 @@ extern "C" {
 typedef struct
 {
     int scroll;
+    int scale;
 } sounds_t;
 
 typedef struct

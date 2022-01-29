@@ -491,15 +491,108 @@ unsigned int monitor_tests(state_t *state, int reinit)
     return new_screen;
 }
 
+#define AUDIO_MAX_SCREENS 4
+
 unsigned int audio_tests(state_t *state, int reinit)
 {
-    // TODO: Audio subsystem test.
+    static unsigned int screen = 0;
+
     if (reinit)
     {
+        // Start out with silence.
+        screen = 0;
     }
 
     // If we need to switch screens.
-    unsigned int new_screen = SCREEN_MAIN_MENU;
+    int new_screen = SCREEN_AUDIO_TESTS;
+
+    controls_t controls = get_controls(state, reinit, COMBINED_CONTROLS);
+
+    int start_please = 0;
+    if (controls.test_pressed || controls.start_pressed)
+    {
+        // Exit out of the audio test screen.
+        audio_stop_registered_sound(state->sounds.scale);
+        new_screen = SCREEN_MAIN_MENU;
+    }
+    else if (controls.right_pressed || controls.service_pressed)
+    {
+        // Play the next sound.
+        audio_stop_registered_sound(state->sounds.scale);
+
+        screen++;
+        if (screen >= AUDIO_MAX_SCREENS) { screen = 0; }
+        start_please = 1;
+    }
+    else if (controls.left_pressed)
+    {
+        // Play the previous sound.
+        audio_stop_registered_sound(state->sounds.scale);
+
+        screen--;
+        if (screen < 0) { screen = (AUDIO_MAX_SCREENS - 1); }
+        start_please = 1;
+    }
+
+    if (start_please)
+    {
+        switch(screen)
+        {
+            case 1:
+            {
+                audio_play_registered_sound(state->sounds.scale, SPEAKER_LEFT, 1.0);
+                break;
+            }
+            case 2:
+            {
+                audio_play_registered_sound(state->sounds.scale, SPEAKER_RIGHT, 1.0);
+                break;
+            }
+            case 3:
+            {
+                audio_play_registered_sound(state->sounds.scale, SPEAKER_LEFT | SPEAKER_RIGHT, 1.0);
+                break;
+            }
+        }
+    }
+
+    // Instructions page.
+    char *instructions[] = {
+        "Use joystick left/right to start/stop sound.",
+        "Press start button to exit back to main menu.",
+        "",
+        "Alternatively, use service to start/stop sound and test to exit.",
+    };
+
+    for (int i = 0; i < sizeof(instructions) / sizeof(instructions[0]); i++)
+    {
+        font_metrics_t metrics = font_get_text_metrics(state->font_12pt, instructions[i]);
+        ta_draw_text((video_width() - metrics.width) / 2, 22 + (14 * i), state->font_12pt, rgb(255, 255, 255), instructions[i]);
+    }
+
+    switch(screen)
+    {
+        case 0:
+        {
+            ta_draw_text(64, 128, state->font_18pt, rgb(255, 255, 255), "No sound playing.");
+            break;
+        }
+        case 1:
+        {
+            ta_draw_text(64, 128, state->font_18pt, rgb(255, 255, 255), "Left speaker only.");
+            break;
+        }
+        case 2:
+        {
+            ta_draw_text(64, 128, state->font_18pt, rgb(255, 255, 255), "Right speaker only.");
+            break;
+        }
+        case 3:
+        {
+            ta_draw_text(64, 128, state->font_18pt, rgb(255, 255, 255), "Both speakers.");
+            break;
+        }
+    }
 
     return new_screen;
 }

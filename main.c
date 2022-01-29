@@ -12,6 +12,8 @@
 // Sounds compiled in from Makefile.
 extern uint8_t *scroll_raw_data;
 extern unsigned int scroll_raw_len;
+extern uint8_t *scale_raw_data;
+extern unsigned int scale_raw_len;
 
 // Sprites, compiled in from Makefile.
 extern unsigned int up_png_width;
@@ -49,6 +51,8 @@ void main()
 
     // Initialize some system sounds.
     state.sounds.scroll = audio_register_sound(AUDIO_FORMAT_16BIT, 44100, scroll_raw_data, scroll_raw_len / 2);
+    state.sounds.scale = audio_register_sound(AUDIO_FORMAT_16BIT, 11025, scale_raw_data, scale_raw_len / 2);
+    audio_set_registered_sound_loop(state.sounds.scale, 0);
 
     // Attach our fonts
     extern uint8_t *dejavusans_ttf_data;

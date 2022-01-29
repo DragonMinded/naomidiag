@@ -13,6 +13,7 @@ SRCS += dejavusans.ttf
 
 # Sounds for menu navigation and audio test.
 SRCS += scroll.raw
+SRCS += scale.raw
 
 # Graphics for cursor and up/down scroll indicators.
 SRCS += up.png
