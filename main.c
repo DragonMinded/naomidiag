@@ -31,6 +31,9 @@ extern void *pswoff_png_data;
 extern unsigned int pswon_png_width;
 extern unsigned int pswon_png_height;
 extern void *pswon_png_data;
+extern unsigned int buttonmask_png_width;
+extern unsigned int buttonmask_png_height;
+extern void *buttonmask_png_data;
 
 void main()
 {
@@ -54,7 +57,7 @@ void main()
     state.sounds.scale = audio_register_sound(AUDIO_FORMAT_16BIT, 11025, scale_raw_data, scale_raw_len / 2);
     audio_set_registered_sound_loop(state.sounds.scale, 0);
 
-    // Attach our fonts
+    // Attach our menu/system fonts
     extern uint8_t *dejavusans_ttf_data;
     extern unsigned int dejavusans_ttf_len;
     state.font_18pt = font_add(dejavusans_ttf_data, dejavusans_ttf_len);
@@ -62,12 +65,19 @@ void main()
     state.font_12pt = font_add(dejavusans_ttf_data, dejavusans_ttf_len);
     font_set_size(state.font_12pt, 12);
 
+    // Attach our input test font
+    extern uint8_t *dejavumono_ttf_data;
+    extern unsigned int dejavumono_ttf_len;
+    state.font_mono = font_add(dejavumono_ttf_data, dejavumono_ttf_len);
+    font_set_size(state.font_mono, 12);
+
     // Attach our sprites
     state.sprites.up = ta_texture_desc_malloc_direct(up_png_width, up_png_data, TA_TEXTUREMODE_ARGB1555);
     state.sprites.down = ta_texture_desc_malloc_direct(dn_png_width, dn_png_data, TA_TEXTUREMODE_ARGB1555);
     state.sprites.cursor = ta_texture_desc_malloc_direct(cursor_png_width, cursor_png_data, TA_TEXTUREMODE_ARGB1555);
     state.sprites.pswoff = ta_texture_desc_malloc_direct(pswoff_png_width, pswoff_png_data, TA_TEXTUREMODE_ARGB1555);
     state.sprites.pswon = ta_texture_desc_malloc_direct(pswon_png_width, pswon_png_data, TA_TEXTUREMODE_ARGB1555);
+    state.sprites.buttonmask = ta_texture_desc_malloc_direct(buttonmask_png_width, buttonmask_png_data, TA_TEXTUREMODE_ARGB1555);
 
     // FPS calculation for debugging.
     double fps_value = 60.0;

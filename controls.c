@@ -129,6 +129,30 @@ controls_t get_controls(state_t *state, int reinit, int full_separate)
     controls.psw2 = held.psw2;
     controls.dipswitches = (held.dip1 ? 0x1 : 0x0) | (held.dip2 ? 0x2 : 0x0) | (held.dip3 ? 0x4 : 0x0) | (held.dip4 ? 0x8 : 0x0);
 
+    // Process input test controls.
+    controls.joy1_u = held.player1.up;
+    controls.joy1_d = held.player1.down;
+    controls.joy1_l = held.player1.left;
+    controls.joy1_r = held.player1.right;
+    controls.joy1_s = held.player1.start;
+    controls.joy1_1 = held.player1.button1;
+    controls.joy1_2 = held.player1.button2;
+    controls.joy1_3 = held.player1.button3;
+    controls.joy1_4 = held.player1.button4;
+    controls.joy1_5 = held.player1.button5;
+    controls.joy1_6 = held.player1.button6;
+    controls.joy2_u = held.player2.up;
+    controls.joy2_d = held.player2.down;
+    controls.joy2_l = held.player2.left;
+    controls.joy2_r = held.player2.right;
+    controls.joy2_s = held.player2.start;
+    controls.joy2_1 = held.player2.button1;
+    controls.joy2_2 = held.player2.button2;
+    controls.joy2_3 = held.player2.button3;
+    controls.joy2_4 = held.player2.button4;
+    controls.joy2_5 = held.player2.button5;
+    controls.joy2_6 = held.player2.button6;
+
     if (pressed.test || ((!full_separate) && pressed.psw1))
     {
         controls.test_pressed = 1;

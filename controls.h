@@ -23,6 +23,30 @@ typedef struct
     uint8_t psw2;
     uint8_t dipswitches;
 
+    // The following controls are for the digital input test.
+    uint8_t joy1_u;
+    uint8_t joy1_d;
+    uint8_t joy1_l;
+    uint8_t joy1_r;
+    uint8_t joy1_s;
+    uint8_t joy1_1;
+    uint8_t joy1_2;
+    uint8_t joy1_3;
+    uint8_t joy1_4;
+    uint8_t joy1_5;
+    uint8_t joy1_6;
+    uint8_t joy2_u;
+    uint8_t joy2_d;
+    uint8_t joy2_l;
+    uint8_t joy2_r;
+    uint8_t joy2_s;
+    uint8_t joy2_1;
+    uint8_t joy2_2;
+    uint8_t joy2_3;
+    uint8_t joy2_4;
+    uint8_t joy2_5;
+    uint8_t joy2_6;
+
     // The following controlls need raw analog values for calibration.
     uint8_t joy1_h;
     uint8_t joy1_v;

@@ -8,19 +8,21 @@ SRCS += main.c
 SRCS += controls.c
 SRCS += screens.c
 
-# Our system font for all screens.
+# Our system fonts for all screens.
 SRCS += dejavusans.ttf
+SRCS += dejavumono.ttf
 
 # Sounds for menu navigation and audio test.
 SRCS += scroll.raw
 SRCS += scale.raw
 
-# Graphics for cursor and up/down scroll indicators.
+# Graphics for cursor, up/down scroll indicators and IO tests.
 SRCS += up.png
 SRCS += dn.png
 SRCS += cursor.png
 SRCS += pswoff.png
 SRCS += pswon.png
+SRCS += buttonmask.png
 
 # Libraries we need to link against.
 LIBS += -lnaomisprite -lfreetype -lbz2 -lz -lpng16

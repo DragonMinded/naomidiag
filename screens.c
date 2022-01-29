@@ -111,18 +111,6 @@ entry_t entries[] = {
     }
 };
 
-void ta_draw_rectangle(int left, int top, int right, int bottom, color_t color)
-{
-    vertex_t vertexes[] = {
-        { left, bottom, 1 },
-        { left, top, 1 },
-        { right, top, 1 },
-        { right, bottom, 1 },
-    };
-
-    ta_fill_box(TA_CMD_POLYGON_TYPE_TRANSPARENT, vertexes, color);
-}
-
 pthread_t spawn_background_task(void *(*task)(void * param), void *param)
 {
     pthread_t thread;
@@ -387,7 +375,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
                 rgb(0, 0, 255),
             };
 
-            ta_draw_rectangle(0, 0, video_width(), video_height(), colors[screen - 1]);
+            sprite_draw_box(0, 0, video_width(), video_height(), colors[screen - 1]);
             break;
         }
         case 5:
@@ -435,7 +423,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
                     };
 
                     /* Draw it! */
-                    ta_draw_rectangle(left, top, right, bottom, actual);
+                    sprite_draw_box(left, top, right, bottom, actual);
                 }
             }
 
@@ -472,7 +460,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
                     accum -= chors;
                 }
 
-                ta_draw_rectangle(left + bump, top, right + bump, bottom, rgb(255, 255, 255));
+                sprite_draw_box(left + bump, top, right + bump, bottom, rgb(255, 255, 255));
             }
 
             accum = 0;
@@ -492,7 +480,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
                     accum -= cvers;
                 }
 
-                ta_draw_rectangle(left, top + bump, right, bottom + bump, rgb(255, 255, 255));
+                sprite_draw_box(left, top + bump, right, bottom + bump, rgb(255, 255, 255));
             }
 
             break;
@@ -608,15 +596,180 @@ unsigned int audio_tests(state_t *state, int reinit)
     return new_screen;
 }
 
+color_t char2rgb(char c)
+{
+    switch(c)
+    {
+        // Color pairs that should not be possible to hit
+        // simultaneously.
+        case 'U':
+        case 'D':
+            return rgb(255, 0, 0);
+        case 'L':
+        case 'R':
+            return rgb(0, 255, 0);
+        case 'S':
+            return rgb(255, 255, 0);
+        case '1':
+            return rgb(0, 0, 255);
+        case '2':
+            return rgb(255, 0, 255);
+        case '3':
+            return rgb(0, 255, 255);
+        case '4':
+            return rgb(255, 127, 40);
+        case '5':
+            return rgb(255, 128, 192);
+        case '6':
+            return rgb(180, 255, 30);
+    }
+
+    return rgb(255, 255, 255);
+}
+
+void ta_draw_button(state_t *state, int x, int y, float scale, color_t color)
+{
+    // First, draw the backing graphic.
+    int diameter = (int)(48.0 * scale);
+    sprite_draw_box(x, y, x + diameter, y + diameter, color);
+
+    // Now, draw the mask in front of it.
+    sprite_draw_scaled(x, y, scale, scale, state->sprites.buttonmask);
+}
+
+#define MAX_HIST_POSITIONS 60
+
 unsigned int input_tests(state_t *state, int reinit)
 {
-    // TODO: Digital input tests
+    // The position in the histogram.
+    static unsigned int hist_pos = 0;
+
+    // Each position represented as a character.
+    static unsigned char hist_val[2][MAX_HIST_POSITIONS];
+
     if (reinit)
     {
+        // Reset the histogram.
+        memset(hist_val, '-', sizeof(hist_val[0][0]) * 2 * MAX_HIST_POSITIONS);
+        hist_pos = 0;
     }
 
     // If we need to switch screens.
-    unsigned int new_screen = SCREEN_MAIN_MENU;
+    unsigned int new_screen = SCREEN_INPUT_TESTS;
+
+    controls_t controls = get_controls(state, reinit, COMBINED_CONTROLS);
+    if (controls.test_pressed)
+    {
+        // Exit out of the digital input test screen.
+        new_screen = SCREEN_MAIN_MENU;
+    }
+
+    // Calculate what each histogram should be displaying.
+    char controlvals[11] = {'U', 'D', 'L', 'R', 'S', '1', '2', '3', '4', '5', '6' };
+    uint8_t heldcontrols[2][11] = {
+        {
+            controls.joy1_u,
+            controls.joy1_d,
+            controls.joy1_l,
+            controls.joy1_r,
+            controls.joy1_s,
+            controls.joy1_1,
+            controls.joy1_2,
+            controls.joy1_3,
+            controls.joy1_4,
+            controls.joy1_5,
+            controls.joy1_6
+        },
+        {
+            controls.joy2_u,
+            controls.joy2_d,
+            controls.joy2_l,
+            controls.joy2_r,
+            controls.joy2_s,
+            controls.joy2_1,
+            controls.joy2_2,
+            controls.joy2_3,
+            controls.joy2_4,
+            controls.joy2_5,
+            controls.joy2_6
+        },
+    };
+
+    for (int player = 0; player < 2; player++)
+    {
+        hist_val[player][hist_pos] = '-';
+        for (int control = 0; control < (sizeof(controlvals) / sizeof(controlvals[0])); control++)
+        {
+            if (heldcontrols[player][control])
+            {
+                hist_val[player][hist_pos] = controlvals[control];
+                break;
+            }
+        }
+    }
+
+    char *instructions[] = {
+        "Press test to exit.",
+    };
+
+    for (int i = 0; i < sizeof(instructions) / sizeof(instructions[0]); i++)
+    {
+        font_metrics_t metrics = font_get_text_metrics(state->font_12pt, instructions[i]);
+        ta_draw_text((video_width() - metrics.width) / 2, 22 + (14 * i), state->font_12pt, rgb(255, 255, 255), instructions[i]);
+    }
+
+    // Display the control panel.
+    for (int player = 0; player < 2; player++)
+    {
+        // Draw joystick as a crude D-pad.
+        ta_draw_button(state, CONTENT_HOFFSET + (300 * player), CONTENT_VOFFSET + 24, 0.5, heldcontrols[player][2] ? char2rgb('L') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 48 + (300 * player), CONTENT_VOFFSET + 24, 0.5, heldcontrols[player][3] ? char2rgb('R') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 24 + (300 * player), CONTENT_VOFFSET, 0.5, heldcontrols[player][0] ? char2rgb('U') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 24 + (300 * player), CONTENT_VOFFSET + 48, 0.5, heldcontrols[player][1] ? char2rgb('D') : rgb(128, 128, 128));
+
+        // Draw buttons.
+        ta_draw_button(state, CONTENT_HOFFSET + 90 + (300 * player), CONTENT_VOFFSET + 18, 0.5, heldcontrols[player][5] ? char2rgb('1') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 90 + 28 + (300 * player), CONTENT_VOFFSET + 10, 0.5, heldcontrols[player][6] ? char2rgb('2') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 90 + 56 + (300 * player), CONTENT_VOFFSET + 10, 0.5, heldcontrols[player][7] ? char2rgb('3') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 90 + (300 * player), CONTENT_VOFFSET + 30 + 18, 0.5, heldcontrols[player][8] ? char2rgb('4') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 90 + 28 + (300 * player), CONTENT_VOFFSET + 30 + 10, 0.5, heldcontrols[player][9] ? char2rgb('5') : rgb(128, 128, 128));
+        ta_draw_button(state, CONTENT_HOFFSET + 90 + 56 + (300 * player), CONTENT_VOFFSET + 30 + 10, 0.5, heldcontrols[player][10] ? char2rgb('6') : rgb(128, 128, 128));
+    }
+
+    // Display the start buttons separately, since they go in "the middle".
+    ta_draw_button(state, CONTENT_HOFFSET + 210, CONTENT_VOFFSET, 0.4, heldcontrols[0][4] ? char2rgb('S') : rgb(128, 128, 128));
+    ta_draw_button(state, CONTENT_HOFFSET + 210 + 30, CONTENT_VOFFSET, 0.4, heldcontrols[1][4] ? char2rgb('S') : rgb(128, 128, 128));
+
+    // Now, display the histogram.
+    int hist_top = CONTENT_VOFFSET + 160;
+    int hist_left = CONTENT_HOFFSET;
+
+    for (int player = 0; player < 2; player++)
+    {
+        // Draw which player this is for.
+        ta_draw_text(hist_left, hist_top + (player * 64), state->font_18pt, rgb(255, 255, 255), "Player %d History", player + 1);
+
+        for (int i = 0; i < MAX_HIST_POSITIONS; i++)
+        {
+            int left = hist_left + (8 * i);
+            int top = hist_top + (player * 64) + 30;
+            int right = left + 8;
+            int bottom = top + 8;
+
+            // First, if this is where the current histogram position is, display a box.
+            if (i == hist_pos)
+            {
+                sprite_draw_box(left, top - 2, right, bottom + 10, rgb(96, 0, 0));
+            }
+
+            // Now, draw the character.
+            ta_draw_text(left, top, state->font_mono, char2rgb(hist_val[player][i]), "%c", hist_val[player][i]);
+        }
+    }
+
+    // Move to the next slot.
+    hist_pos ++;
+    if (hist_pos >= MAX_HIST_POSITIONS) { hist_pos = 0; }
 
     return new_screen;
 }
@@ -735,20 +888,20 @@ unsigned int analog_tests(state_t *state, int reinit)
             }
 
             // First draw the outline and inner motion section.
-            ta_draw_rectangle(joy1left, joy1top, joy1left + 255 + 2, joy1top + 255 + 2, rgb(255, 255, 255));
-            ta_draw_rectangle(joy2left, joy2top, joy2left + 255 + 2, joy2top + 255 + 2, rgb(255, 255, 255));
-            ta_draw_rectangle(joy1left + 1, joy1top + 1, joy1left + 255 + 1, joy1top + 255 + 1, rgb(64, 64, 64));
-            ta_draw_rectangle(joy2left + 1, joy2top + 1, joy2left + 255 + 1, joy2top + 255 + 1, rgb(64, 64, 64));
+            sprite_draw_box(joy1left, joy1top, joy1left + 255 + 2, joy1top + 255 + 2, rgb(255, 255, 255));
+            sprite_draw_box(joy2left, joy2top, joy2left + 255 + 2, joy2top + 255 + 2, rgb(255, 255, 255));
+            sprite_draw_box(joy1left + 1, joy1top + 1, joy1left + 255 + 1, joy1top + 255 + 1, rgb(64, 64, 64));
+            sprite_draw_box(joy2left + 1, joy2top + 1, joy2left + 255 + 1, joy2top + 255 + 1, rgb(64, 64, 64));
 
             // Now draw an outline for the min/max of each axis.
-            ta_draw_rectangle(
+            sprite_draw_box(
                 joy1left + 1 + ranges[0][1][0],
                 joy1top + 1 + ranges[0][0][0],
                 joy1left + 1 + ranges[0][1][1],
                 joy1top + 1 + ranges[0][0][1],
                 rgb(64, 192, 64)
             );
-            ta_draw_rectangle(
+            sprite_draw_box(
                 joy2left + 1 + ranges[1][1][0],
                 joy2top + 1 + ranges[1][0][0],
                 joy2left + 1 + ranges[1][1][1],
@@ -757,14 +910,14 @@ unsigned int analog_tests(state_t *state, int reinit)
             );
 
             // Now draw a square for the current location of the joystick.
-            ta_draw_rectangle(
+            sprite_draw_box(
                 joy1left + 1 + values[0][1] - 15,
                 joy1top + 1 + values[0][0] - 15,
                 joy1left + 1 + values[0][1] + 15,
                 joy1top + 1 + values[0][0] + 15,
                 rgb(255, 255, 255)
             );
-            ta_draw_rectangle(
+            sprite_draw_box(
                 joy2left + 1 + values[1][1] - 15,
                 joy2top + 1 + values[1][0] - 15,
                 joy2left + 1 + values[1][1] + 15,
@@ -816,11 +969,11 @@ unsigned int analog_tests(state_t *state, int reinit)
                         int bottom = top + 50;
 
                         // First draw the control itself.
-                        ta_draw_rectangle(left, top, right, bottom, rgb(255, 255, 255));
-                        ta_draw_rectangle(left + 1, top + 1, right - 1, bottom - 1, rgb(64, 64, 64));
+                        sprite_draw_box(left, top, right, bottom, rgb(255, 255, 255));
+                        sprite_draw_box(left + 1, top + 1, right - 1, bottom - 1, rgb(64, 64, 64));
 
                         // Now, draw the outline of min/max range.
-                        ta_draw_rectangle(
+                        sprite_draw_box(
                             left + 1 + ranges[player][control][0],
                             top + 1,
                             left + 1 + ranges[player][control][1],
@@ -829,7 +982,7 @@ unsigned int analog_tests(state_t *state, int reinit)
                         );
 
                         // Now, draw a slider displaying where the control is.
-                        ta_draw_rectangle(
+                        sprite_draw_box(
                             left + values[player][control],
                             top + 1,
                             left + 2 + values[player][control],
@@ -864,11 +1017,11 @@ unsigned int analog_tests(state_t *state, int reinit)
                         int bottom = top + 257;
 
                         // First draw the control itself.
-                        ta_draw_rectangle(left, top, right, bottom, rgb(255, 255, 255));
-                        ta_draw_rectangle(left + 1, top + 1, right - 1, bottom - 1, rgb(64, 64, 64));
+                        sprite_draw_box(left, top, right, bottom, rgb(255, 255, 255));
+                        sprite_draw_box(left + 1, top + 1, right - 1, bottom - 1, rgb(64, 64, 64));
 
                         // Now, draw the outline of min/max range.
-                        ta_draw_rectangle(
+                        sprite_draw_box(
                             left + 1,
                             top + 1 + ranges[player][control][0],
                             right - 1,
@@ -877,7 +1030,7 @@ unsigned int analog_tests(state_t *state, int reinit)
                         );
 
                         // Now, draw a slider displaying where the control is.
-                        ta_draw_rectangle(
+                        sprite_draw_box(
                             left + 1,
                             top + values[player][control],
                             right - 1,
@@ -949,14 +1102,14 @@ unsigned int dip_tests(state_t *state, int reinit)
         rgb(255, 255, 255),
         "DIPSW"
     );
-    ta_draw_rectangle(
+    sprite_draw_box(
         CONTENT_HOFFSET + 256,
         CONTENT_VOFFSET + 32,
         CONTENT_HOFFSET + 256 + (4 * DIP_WIDTH) + (5 * DIP_SPACING) + (2 * DIP_BORDER),
         CONTENT_VOFFSET + 32 + (2 * DIP_BORDER) + (2 * DIP_SPACING) + DIP_HEIGHT,
         rgb(0, 0, 128)
     );
-    ta_draw_rectangle(
+    sprite_draw_box(
         CONTENT_HOFFSET + 256 + DIP_BORDER,
         CONTENT_VOFFSET + 32 + DIP_BORDER,
         CONTENT_HOFFSET + 256 + (4 * DIP_WIDTH) + (5 * DIP_SPACING) + (DIP_BORDER),
@@ -971,7 +1124,7 @@ unsigned int dip_tests(state_t *state, int reinit)
         int top = CONTENT_VOFFSET + 32 + DIP_BORDER + DIP_SPACING;
         int bottom = top + DIP_HEIGHT;
 
-        ta_draw_rectangle(left, top, right, bottom, rgb(32, 32, 32));
+        sprite_draw_box(left, top, right, bottom, rgb(32, 32, 32));
 
         color_t color;
         if ((1 << i) & controls.dipswitches)
@@ -985,7 +1138,7 @@ unsigned int dip_tests(state_t *state, int reinit)
             color = rgb(0, 0, 128);
         }
 
-        ta_draw_rectangle(left, top, right, bottom, color);
+        sprite_draw_box(left, top, right, bottom, color);
     }
 
     return new_screen;

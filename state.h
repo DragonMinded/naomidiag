@@ -23,6 +23,7 @@ typedef struct
     texture_description_t *cursor;
     texture_description_t *pswoff;
     texture_description_t *pswon;
+    texture_description_t *buttonmask;
 } sprites_t;
 
 typedef struct
@@ -32,6 +33,7 @@ typedef struct
     double animation_counter;
     font_t *font_18pt;
     font_t *font_12pt;
+    font_t *font_mono;
     sprites_t sprites;
     sounds_t sounds;
 } state_t;
