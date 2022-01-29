@@ -153,6 +153,12 @@ controls_t get_controls(state_t *state, int reinit, int full_separate)
     controls.joy2_5 = held.player2.button5;
     controls.joy2_6 = held.player2.button6;
 
+    // Even though we navigate through these, it can still help for verifying
+    // a correct pinout for a harness that is made.
+    controls.test = held.test;
+    controls.joy1_svc = held.player1.service;
+    controls.joy2_svc = held.player2.service;
+
     if (pressed.test || ((!full_separate) && pressed.psw1))
     {
         controls.test_pressed = 1;

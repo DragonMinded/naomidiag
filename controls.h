@@ -47,6 +47,10 @@ typedef struct
     uint8_t joy2_5;
     uint8_t joy2_6;
 
+    uint8_t test;
+    uint8_t joy1_svc;
+    uint8_t joy2_svc;
+
     // The following controlls need raw analog values for calibration.
     uint8_t joy1_h;
     uint8_t joy1_v;

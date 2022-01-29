@@ -658,7 +658,7 @@ unsigned int input_tests(state_t *state, int reinit)
     unsigned int new_screen = SCREEN_INPUT_TESTS;
 
     controls_t controls = get_controls(state, reinit, COMBINED_CONTROLS);
-    if (controls.test_pressed)
+    if ((controls.test && (controls.joy1_svc || controls.joy2_svc)) || (controls.psw1 && controls.psw2))
     {
         // Exit out of the digital input test screen.
         new_screen = SCREEN_MAIN_MENU;
@@ -709,7 +709,7 @@ unsigned int input_tests(state_t *state, int reinit)
     }
 
     char *instructions[] = {
-        "Press test to exit.",
+        "Press test and service simultaneously to exit.",
     };
 
     for (int i = 0; i < sizeof(instructions) / sizeof(instructions[0]); i++)
@@ -739,6 +739,23 @@ unsigned int input_tests(state_t *state, int reinit)
     // Display the start buttons separately, since they go in "the middle".
     ta_draw_button(state, CONTENT_HOFFSET + 210, CONTENT_VOFFSET, 0.4, heldcontrols[0][4] ? char2rgb('S') : rgb(128, 128, 128));
     ta_draw_button(state, CONTENT_HOFFSET + 210 + 30, CONTENT_VOFFSET, 0.4, heldcontrols[1][4] ? char2rgb('S') : rgb(128, 128, 128));
+
+    // Display test/service switches special case.
+    int tleft = CONTENT_HOFFSET + 190;
+    int ttop = CONTENT_VOFFSET + 96;
+    sprite_draw_box(tleft, ttop, tleft + 24, ttop + 24, controls.test ? rgb(255, 255, 255) : rgb(128, 128, 128));
+    font_metrics_t metrics = font_get_text_metrics(state->font_12pt, "test");
+    ta_draw_text(tleft + (24 - (int)metrics.width) / 2, ttop + 26, state->font_12pt, rgb(255, 255, 255), "test");
+
+    tleft += 32;
+    sprite_draw_box(tleft, ttop, tleft + 24, ttop + 24, controls.joy1_svc ? rgb(255, 255, 255) : rgb(128, 128, 128));
+    metrics = font_get_text_metrics(state->font_12pt, "svc1");
+    ta_draw_text(tleft + (24 - (int)metrics.width) / 2, ttop + 26, state->font_12pt, rgb(255, 255, 255), "svc1");
+
+    tleft += 32;
+    sprite_draw_box(tleft, ttop, tleft + 24, ttop + 24, controls.joy2_svc ? rgb(255, 255, 255) : rgb(128, 128, 128));
+    metrics = font_get_text_metrics(state->font_12pt, "svc2");
+    ta_draw_text(tleft + (24 - (int)metrics.width) / 2, ttop + 26, state->font_12pt, rgb(255, 255, 255), "svc2");
 
     // Now, display the histogram.
     int hist_top = CONTENT_VOFFSET + 160;
