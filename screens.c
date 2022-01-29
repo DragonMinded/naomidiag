@@ -30,6 +30,10 @@
 #define SCREEN_SYSTEM_MENU 1001
 #define SCREEN_REBOOT_SYSTEM 1002
 
+// The offset down onto each screen past where we might display instructions.
+#define CONTENT_HOFFSET 48
+#define CONTENT_VOFFSET 92
+
 // The main menu selected entry, used for making sure the cursor
 // is preserved when exiting a diagnostic screen.
 static unsigned int main_selected_entry = 0;
@@ -581,22 +585,22 @@ unsigned int audio_tests(state_t *state, int reinit)
     {
         case 0:
         {
-            ta_draw_text(64, 128, state->font_18pt, rgb(255, 255, 255), "No sound playing.");
+            ta_draw_text(CONTENT_HOFFSET, CONTENT_VOFFSET, state->font_18pt, rgb(255, 255, 255), "No sound playing.");
             break;
         }
         case 1:
         {
-            ta_draw_text(64, 128, state->font_18pt, rgb(255, 255, 255), "Left speaker only.");
+            ta_draw_text(CONTENT_HOFFSET, CONTENT_VOFFSET, state->font_18pt, rgb(255, 255, 255), "Left speaker only.");
             break;
         }
         case 2:
         {
-            ta_draw_text(64, 128, state->font_18pt, rgb(255, 255, 255), "Right speaker only.");
+            ta_draw_text(CONTENT_HOFFSET, CONTENT_VOFFSET, state->font_18pt, rgb(255, 255, 255), "Right speaker only.");
             break;
         }
         case 3:
         {
-            ta_draw_text(64, 128, state->font_18pt, rgb(255, 255, 255), "Both speakers.");
+            ta_draw_text(CONTENT_HOFFSET, CONTENT_VOFFSET, state->font_18pt, rgb(255, 255, 255), "Both speakers.");
             break;
         }
     }
@@ -706,22 +710,29 @@ unsigned int analog_tests(state_t *state, int reinit)
         {
             // Joystic view, displaying only current values for X/Y.
             // Draw 1P and 2P joysticks as a box representation.
-            int joy1left = 64;
+            int joy1left = CONTENT_HOFFSET;
             int joy2left = joy1left + 270;
-            int joy1top = 128 + 24;
+            int joy1top = CONTENT_VOFFSET + 24;
             int joy2top = joy1top;
 
             if (video_is_vertical())
             {
                 joy2left = joy1left;
-                joy2top = joy1top + 270 + 24 + 24;
-            }
+                joy1top -= 24;
+                joy2top = joy1top + 270;
 
-            // Draw labels.
-            font_metrics_t metrics = font_get_text_metrics(state->font_18pt, "1P Joystick");
-            ta_draw_text(joy1left + (257 - metrics.width) / 2, joy1top - 24, state->font_18pt, rgb(255, 255, 255), "1P Joystick");
-            metrics = font_get_text_metrics(state->font_18pt, "2P Joystick");
-            ta_draw_text(joy2left + (257 - metrics.width) / 2, joy2top - 24, state->font_18pt, rgb(255, 255, 255), "2P Joystick");
+                // Draw labels.
+                ta_draw_text(joy1left + 260, joy1top, state->font_18pt, rgb(255, 255, 255), "1P Joystick");
+                ta_draw_text(joy2left + 260, joy2top, state->font_18pt, rgb(255, 255, 255), "1P Joystick");
+            }
+            else
+            {
+                // Draw labels.
+                font_metrics_t metrics = font_get_text_metrics(state->font_18pt, "1P Joystick");
+                ta_draw_text(joy1left + (257 - metrics.width) / 2, joy1top - 24, state->font_18pt, rgb(255, 255, 255), "1P Joystick");
+                metrics = font_get_text_metrics(state->font_18pt, "2P Joystick");
+                ta_draw_text(joy2left + (257 - metrics.width) / 2, joy2top - 24, state->font_18pt, rgb(255, 255, 255), "2P Joystick");
+            }
 
             // First draw the outline and inner motion section.
             ta_draw_rectangle(joy1left, joy1top, joy1left + 255 + 2, joy1top + 255 + 2, rgb(255, 255, 255));
@@ -761,11 +772,20 @@ unsigned int analog_tests(state_t *state, int reinit)
                 rgb(255, 255, 255)
             );
 
-            // Draw current values.
-            metrics = font_get_text_metrics(state->font_18pt, "H: %02X, V: %02X", values[0][1], values[0][0]);
-            ta_draw_text(joy1left + (257 - metrics.width) / 2, joy1top + 260, state->font_18pt, rgb(255, 255, 255), "H: %02X, V: %02X", values[0][1], values[0][0]);
-            metrics = font_get_text_metrics(state->font_18pt, "H: %02X, V: %02X", values[1][1], values[1][0]);
-            ta_draw_text(joy2left + (257 - metrics.width) / 2, joy2top + 260, state->font_18pt, rgb(255, 255, 255), "H: %02X, V: %02X", values[1][1], values[1][0]);
+            if (video_is_vertical())
+            {
+                // Draw current values.
+                ta_draw_text(joy1left + 260, joy1top + 24, state->font_18pt, rgb(255, 255, 255), "H: %02X, V: %02X", values[0][1], values[0][0]);
+                ta_draw_text(joy2left + 260, joy2top + 24, state->font_18pt, rgb(255, 255, 255), "H: %02X, V: %02X", values[1][1], values[1][0]);
+            }
+            else
+            {
+                // Draw current values.
+                font_metrics_t metrics = font_get_text_metrics(state->font_18pt, "H: %02X, V: %02X", values[0][1], values[0][0]);
+                ta_draw_text(joy1left + (257 - metrics.width) / 2, joy1top + 260, state->font_18pt, rgb(255, 255, 255), "H: %02X, V: %02X", values[0][1], values[0][0]);
+                metrics = font_get_text_metrics(state->font_18pt, "H: %02X, V: %02X", values[1][1], values[1][0]);
+                ta_draw_text(joy2left + (257 - metrics.width) / 2, joy2top + 260, state->font_18pt, rgb(255, 255, 255), "H: %02X, V: %02X", values[1][1], values[1][0]);
+            }
 
             break;
         }
@@ -773,55 +793,102 @@ unsigned int analog_tests(state_t *state, int reinit)
         {
             // Analog range view, for pedals/steering/etc.
             // Draw 1P and 2P joysticks as a box representation.
-            int joyleft[2] = { 64 };
-            joyleft[1] = joyleft[0] + 270;
-            int joytop[2] = { 128 + 24 };
-            joytop[1] = joytop[0];
-
+            // Unfortunately this doesn't fit on a vertical screen even with
+            // rearranging controls, so we have two draw paths.
             if (video_is_vertical())
             {
+                int joyleft[2] = { CONTENT_HOFFSET };
                 joyleft[1] = joyleft[0];
-                joytop[1] = joytop[0] + 270 + 24 + 24;
-            }
+                int joytop[2] = { CONTENT_VOFFSET + 24 };
+                joytop[1] = joytop[0] + 270;
 
-            for (int player = 0; player < 2; player++)
-            {
-                // Draw labels.
-                font_metrics_t metrics = font_get_text_metrics(state->font_18pt, "%dP Analog", player + 1);
-                ta_draw_text(joyleft[player] + (257 - metrics.width) / 2, joytop[player] - 24, state->font_18pt, rgb(255, 255, 255), "%dP Analog", player + 1);
-
-                for (int control = 0; control < 4; control++)
+                for (int player = 0; player < 2; player++)
                 {
-                    int left = joyleft[player] + (64 * control);
-                    int right = left + 56;
-                    int top = joytop[player];
-                    int bottom = top + 257;
+                    // Draw labels.
+                    font_metrics_t metrics = font_get_text_metrics(state->font_18pt, "%dP Analog", player + 1);
+                    ta_draw_text(joyleft[player] + (257 - metrics.width) / 2, joytop[player] - 24, state->font_18pt, rgb(255, 255, 255), "%dP Analog", player + 1);
 
-                    // First draw the control itself.
-                    ta_draw_rectangle(left, top, right, bottom, rgb(255, 255, 255));
-                    ta_draw_rectangle(left + 1, top + 1, right - 1, bottom - 1, rgb(64, 64, 64));
+                    for (int control = 0; control < 4; control++)
+                    {
+                        int left = joyleft[player];
+                        int right = left + 257;
+                        int top = joytop[player] + (58 * control);
+                        int bottom = top + 50;
 
-                    // Now, draw the outline of min/max range.
-                    ta_draw_rectangle(
-                        left + 1,
-                        top + 1 + ranges[player][control][0],
-                        right - 1,
-                        top + 1 + ranges[player][control][1],
-                        rgb(64, 192, 64)
-                    );
+                        // First draw the control itself.
+                        ta_draw_rectangle(left, top, right, bottom, rgb(255, 255, 255));
+                        ta_draw_rectangle(left + 1, top + 1, right - 1, bottom - 1, rgb(64, 64, 64));
 
-                    // Now, draw a slider displaying where the control is.
-                    ta_draw_rectangle(
-                        left + 1,
-                        top + values[player][control],
-                        right - 1,
-                        top + 2 + values[player][control],
-                        rgb(255, 255, 255)
-                    );
+                        // Now, draw the outline of min/max range.
+                        ta_draw_rectangle(
+                            left + 1 + ranges[player][control][0],
+                            top + 1,
+                            left + 1 + ranges[player][control][1],
+                            bottom - 1,
+                            rgb(64, 192, 64)
+                        );
 
-                    // Draw current value.
-                    metrics = font_get_text_metrics(state->font_18pt, "%02X", values[player][control]);
-                    ta_draw_text((left + right - metrics.width) / 2, bottom + 2, state->font_18pt, rgb(255, 255, 255), "%02X", values[player][control]);
+                        // Now, draw a slider displaying where the control is.
+                        ta_draw_rectangle(
+                            left + values[player][control],
+                            top + 1,
+                            left + 2 + values[player][control],
+                            bottom - 1,
+                            rgb(255, 255, 255)
+                        );
+
+                        // Draw current value.
+                        metrics = font_get_text_metrics(state->font_18pt, "%02X", values[player][control]);
+                        ta_draw_text(right + 2, (top + bottom - metrics.height) / 2, state->font_18pt, rgb(255, 255, 255), "%02X", values[player][control]);
+                    }
+                }
+            }
+            else
+            {
+                int joyleft[2] = { CONTENT_HOFFSET };
+                joyleft[1] = joyleft[0] + 270;
+                int joytop[2] = { CONTENT_VOFFSET + 24 };
+                joytop[1] = joytop[0];
+
+                for (int player = 0; player < 2; player++)
+                {
+                    // Draw labels.
+                    font_metrics_t metrics = font_get_text_metrics(state->font_18pt, "%dP Analog", player + 1);
+                    ta_draw_text(joyleft[player] + (257 - metrics.width) / 2, joytop[player] - 24, state->font_18pt, rgb(255, 255, 255), "%dP Analog", player + 1);
+
+                    for (int control = 0; control < 4; control++)
+                    {
+                        int left = joyleft[player] + (64 * control);
+                        int right = left + 56;
+                        int top = joytop[player];
+                        int bottom = top + 257;
+
+                        // First draw the control itself.
+                        ta_draw_rectangle(left, top, right, bottom, rgb(255, 255, 255));
+                        ta_draw_rectangle(left + 1, top + 1, right - 1, bottom - 1, rgb(64, 64, 64));
+
+                        // Now, draw the outline of min/max range.
+                        ta_draw_rectangle(
+                            left + 1,
+                            top + 1 + ranges[player][control][0],
+                            right - 1,
+                            top + 1 + ranges[player][control][1],
+                            rgb(64, 192, 64)
+                        );
+
+                        // Now, draw a slider displaying where the control is.
+                        ta_draw_rectangle(
+                            left + 1,
+                            top + values[player][control],
+                            right - 1,
+                            top + 2 + values[player][control],
+                            rgb(255, 255, 255)
+                        );
+
+                        // Draw current value.
+                        metrics = font_get_text_metrics(state->font_18pt, "%02X", values[player][control]);
+                        ta_draw_text((left + right - metrics.width) / 2, bottom + 2, state->font_18pt, rgb(255, 255, 255), "%02X", values[player][control]);
+                    }
                 }
             }
 
@@ -866,24 +933,42 @@ unsigned int dip_tests(state_t *state, int reinit)
 
     // Draw state of the current front panel switches.
     font_metrics_t metrics = font_get_text_metrics(state->font_18pt, "PSW2");
-    ta_draw_text(64 + ((64 - metrics.width) / 2), 128, state->font_18pt, rgb(255, 255, 255), "PSW2");
-    sprite_draw_simple(64, 160, controls.psw2 ? state->sprites.pswon : state->sprites.pswoff);
+    ta_draw_text(CONTENT_HOFFSET + ((64 - metrics.width) / 2), CONTENT_VOFFSET, state->font_18pt, rgb(255, 255, 255), "PSW2");
+    sprite_draw_simple(CONTENT_HOFFSET, CONTENT_VOFFSET + 32, controls.psw2 ? state->sprites.pswon : state->sprites.pswoff);
 
     metrics = font_get_text_metrics(state->font_18pt, "PSW1");
-    ta_draw_text(192 + ((64 - metrics.width) / 2), 128, state->font_18pt, rgb(255, 255, 255), "PSW1");
-    sprite_draw_simple(192, 160, controls.psw1 ? state->sprites.pswon : state->sprites.pswoff);
+    ta_draw_text(CONTENT_HOFFSET + 128 + ((64 - metrics.width) / 2), CONTENT_VOFFSET, state->font_18pt, rgb(255, 255, 255), "PSW1");
+    sprite_draw_simple(CONTENT_HOFFSET + 128, CONTENT_VOFFSET + 32, controls.psw1 ? state->sprites.pswon : state->sprites.pswoff);
 
     // Draw state of the current front panel DIP switches.
     metrics = font_get_text_metrics(state->font_18pt, "DIPSW");
-    ta_draw_text(320 + ((((4 * DIP_WIDTH) + (5 * DIP_SPACING) + (2 * DIP_BORDER)) - metrics.width) / 2), 128, state->font_18pt, rgb(255, 255, 255), "DIPSW");
-    ta_draw_rectangle(320, 160, 320 + (4 * DIP_WIDTH) + (5 * DIP_SPACING) + (2 * DIP_BORDER), 160 + (2 * DIP_BORDER) + (2 * DIP_SPACING) + DIP_HEIGHT, rgb(0, 0, 128));
-    ta_draw_rectangle(320 + DIP_BORDER, 160 + DIP_BORDER, 320 + (4 * DIP_WIDTH) + (5 * DIP_SPACING) + (DIP_BORDER), 160 + (DIP_BORDER) + (2 * DIP_SPACING) + DIP_HEIGHT, rgb(200, 200, 200));
+    ta_draw_text(
+        CONTENT_HOFFSET + 256 + ((((4 * DIP_WIDTH) + (5 * DIP_SPACING) + (2 * DIP_BORDER)) - metrics.width) / 2),
+        CONTENT_VOFFSET,
+        state->font_18pt,
+        rgb(255, 255, 255),
+        "DIPSW"
+    );
+    ta_draw_rectangle(
+        CONTENT_HOFFSET + 256,
+        CONTENT_VOFFSET + 32,
+        CONTENT_HOFFSET + 256 + (4 * DIP_WIDTH) + (5 * DIP_SPACING) + (2 * DIP_BORDER),
+        CONTENT_VOFFSET + 32 + (2 * DIP_BORDER) + (2 * DIP_SPACING) + DIP_HEIGHT,
+        rgb(0, 0, 128)
+    );
+    ta_draw_rectangle(
+        CONTENT_HOFFSET + 256 + DIP_BORDER,
+        CONTENT_VOFFSET + 32 + DIP_BORDER,
+        CONTENT_HOFFSET + 256 + (4 * DIP_WIDTH) + (5 * DIP_SPACING) + (DIP_BORDER),
+        CONTENT_VOFFSET + 32 + (DIP_BORDER) + (2 * DIP_SPACING) + DIP_HEIGHT,
+        rgb(200, 200, 200)
+    );
 
     for (int i = 0; i < 4; i++)
     {
-        int left = 320 + DIP_BORDER + DIP_SPACING + (i * (DIP_SPACING + DIP_WIDTH));
+        int left = CONTENT_HOFFSET + 256 + DIP_BORDER + DIP_SPACING + (i * (DIP_SPACING + DIP_WIDTH));
         int right = left + DIP_WIDTH;
-        int top = 160 + DIP_BORDER + DIP_SPACING;
+        int top = CONTENT_VOFFSET + 32 + DIP_BORDER + DIP_SPACING;
         int bottom = top + DIP_HEIGHT;
 
         ta_draw_rectangle(left, top, right, bottom, rgb(32, 32, 32));
@@ -1175,14 +1260,14 @@ unsigned int eeprom_tests(state_t *state, int reinit)
         case EEPROM_TEST_STATE_SECOND_WRITEBACK:
         case EEPROM_TEST_STATE_FAILED_SECOND_WRITEBACK:
         {
-            ta_draw_text(64, 128 + 72, state->font_18pt, rgb(255, 255, 255), "Performing final writeback...");
+            ta_draw_text(CONTENT_HOFFSET, CONTENT_VOFFSET + 72, state->font_18pt, rgb(255, 255, 255), "Performing final writeback...");
             if (eepromstate == EEPROM_TEST_STATE_FAILED_SECOND_WRITEBACK)
             {
-                ta_draw_text(375, 128 + 72, state->font_18pt, rgb(255, 0, 0), "FAILED");
+                ta_draw_text(CONTENT_HOFFSET + 315, CONTENT_VOFFSET + 72, state->font_18pt, rgb(255, 0, 0), "FAILED");
             }
             else if (eepromstate != EEPROM_TEST_STATE_SECOND_WRITEBACK)
             {
-                ta_draw_text(375, 128 + 72, state->font_18pt, rgb(0, 255, 0), "PASSED");
+                ta_draw_text(CONTENT_HOFFSET + 315, CONTENT_VOFFSET + 72, state->font_18pt, rgb(0, 255, 0), "PASSED");
             }
 
             // Fallthrough to display the previous state.
@@ -1190,14 +1275,14 @@ unsigned int eeprom_tests(state_t *state, int reinit)
         case EEPROM_TEST_STATE_SECOND_READ:
         case EEPROM_TEST_STATE_FAILED_SECOND_READ:
         {
-            ta_draw_text(64, 128 + 48, state->font_18pt, rgb(255, 255, 255), "Performing second read...");
+            ta_draw_text(CONTENT_HOFFSET, CONTENT_VOFFSET + 48, state->font_18pt, rgb(255, 255, 255), "Performing second read...");
             if (eepromstate == EEPROM_TEST_STATE_FAILED_SECOND_READ)
             {
-                ta_draw_text(375, 128 + 48, state->font_18pt, rgb(255, 0, 0), "FAILED");
+                ta_draw_text(CONTENT_HOFFSET + 315, CONTENT_VOFFSET + 48, state->font_18pt, rgb(255, 0, 0), "FAILED");
             }
             else if (eepromstate != EEPROM_TEST_STATE_SECOND_READ)
             {
-                ta_draw_text(375, 128 + 48, state->font_18pt, rgb(0, 255, 0), "PASSED");
+                ta_draw_text(CONTENT_HOFFSET + 315, CONTENT_VOFFSET + 48, state->font_18pt, rgb(0, 255, 0), "PASSED");
             }
 
             // Fallthrough to display the previous state.
@@ -1205,14 +1290,14 @@ unsigned int eeprom_tests(state_t *state, int reinit)
         case EEPROM_TEST_STATE_INITIAL_WRITEBACK:
         case EEPROM_TEST_STATE_FAILED_INITIAL_WRITEBACK:
         {
-            ta_draw_text(64, 128 + 24, state->font_18pt, rgb(255, 255, 255), "Performing inverted writeback...");
+            ta_draw_text(CONTENT_HOFFSET, CONTENT_VOFFSET + 24, state->font_18pt, rgb(255, 255, 255), "Performing inverted writeback...");
             if (eepromstate == EEPROM_TEST_STATE_FAILED_INITIAL_WRITEBACK)
             {
-                ta_draw_text(375, 128 + 24, state->font_18pt, rgb(255, 0, 0), "FAILED");
+                ta_draw_text(CONTENT_HOFFSET + 315, CONTENT_VOFFSET + 24, state->font_18pt, rgb(255, 0, 0), "FAILED");
             }
             else if (eepromstate != EEPROM_TEST_STATE_INITIAL_WRITEBACK)
             {
-                ta_draw_text(375, 128 + 24, state->font_18pt, rgb(0, 255, 0), "PASSED");
+                ta_draw_text(CONTENT_HOFFSET + 315, CONTENT_VOFFSET + 24, state->font_18pt, rgb(0, 255, 0), "PASSED");
             }
 
             // Fallthrough to display the previous state.
@@ -1220,14 +1305,14 @@ unsigned int eeprom_tests(state_t *state, int reinit)
         case EEPROM_TEST_STATE_INITIAL_READ:
         case EEPROM_TEST_STATE_FAILED_INITIAL_READ:
         {
-            ta_draw_text(64, 128, state->font_18pt, rgb(255, 255, 255), "Performing initial read...");
+            ta_draw_text(CONTENT_HOFFSET, CONTENT_VOFFSET, state->font_18pt, rgb(255, 255, 255), "Performing initial read...");
             if (eepromstate == EEPROM_TEST_STATE_FAILED_INITIAL_READ)
             {
-                ta_draw_text(375, 128, state->font_18pt, rgb(255, 0, 0), "FAILED");
+                ta_draw_text(CONTENT_HOFFSET + 315, CONTENT_VOFFSET, state->font_18pt, rgb(255, 0, 0), "FAILED");
             }
             else if (eepromstate != EEPROM_TEST_STATE_INITIAL_READ)
             {
-                ta_draw_text(375, 128, state->font_18pt, rgb(0, 255, 0), "PASSED");
+                ta_draw_text(CONTENT_HOFFSET + 315, CONTENT_VOFFSET, state->font_18pt, rgb(0, 255, 0), "PASSED");
             }
 
             // No more states to display.
@@ -1486,23 +1571,23 @@ unsigned int sram_tests(state_t *state, int reinit)
 
     for (int i = 0; i < (sizeof(results) / sizeof(results[0])); i++)
     {
-        ta_draw_text(64, 128 + (24 * i), state->font_18pt, rgb(255, 255, 255), "%s Test...", titles[i]);
+        ta_draw_text(CONTENT_HOFFSET, CONTENT_VOFFSET + (24 * i), state->font_18pt, rgb(255, 255, 255), "%s Test...", titles[i]);
 
         switch(results[i])
         {
             case 0x0:
             {
-                ta_draw_text(300, 128 + (24 * i), state->font_18pt, rgb(0, 255, 0), "PASSED");
+                ta_draw_text(CONTENT_HOFFSET + 240, CONTENT_VOFFSET + (24 * i), state->font_18pt, rgb(0, 255, 0), "PASSED");
                 break;
             }
             case 0xFFFFFFFF:
             {
-                ta_draw_text(300, 128 + (24 * i), state->font_18pt, rgb(255, 255, 0), "RUNNING");
+                ta_draw_text(CONTENT_HOFFSET + 240, CONTENT_VOFFSET + (24 * i), state->font_18pt, rgb(255, 255, 0), "RUNNING");
                 break;
             }
             default:
             {
-                ta_draw_text(300, 128 + (24 * i), state->font_18pt, rgb(255, 0, 0), "FAILED AT 0x%08X", results[i]);
+                ta_draw_text(CONTENT_HOFFSET + 240, CONTENT_VOFFSET + (24 * i), state->font_18pt, rgb(255, 0, 0), "FAILED AT 0x%08X", results[i]);
                 break;
             }
         }
