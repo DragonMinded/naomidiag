@@ -98,15 +98,21 @@ controls_t get_controls(state_t *state, int reinit, int full_separate)
     controls_t controls;
     controls.joy1_v = held.player1.analog1;
     controls.joy1_h = held.player1.analog2;
+    controls.joy1_a3 = held.player1.analog3;
+    controls.joy1_a4 = held.player1.analog4;
     if (state->settings->system.players >= 2)
     {
         controls.joy2_v = held.player2.analog1;
         controls.joy2_h = held.player2.analog2;
+        controls.joy2_a3 = held.player2.analog3;
+        controls.joy2_a4 = held.player2.analog4;
     }
     else
     {
-        controls.joy2_v = 80;
-        controls.joy2_h = 80;
+        controls.joy2_v = 0x80;
+        controls.joy2_h = 0x80;
+        controls.joy2_a3 = 0x80;
+        controls.joy2_a4 = 0x80;
     }
 
     // Process buttons and repeats.

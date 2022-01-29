@@ -26,8 +26,12 @@ typedef struct
     // The following controlls need raw analog values for calibration.
     uint8_t joy1_h;
     uint8_t joy1_v;
+    uint8_t joy1_a3;
+    uint8_t joy1_a4;
     uint8_t joy2_h;
     uint8_t joy2_v;
+    uint8_t joy2_a3;
+    uint8_t joy2_a4;
 } controls_t;
 
 #define COMBINED_CONTROLS 0

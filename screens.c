@@ -23,6 +23,7 @@
 #define SCREEN_EEPROM_TESTS 4
 #define SCREEN_SRAM_TESTS 5
 #define SCREEN_DIP_TESTS 6
+#define SCREEN_ANALOG_TESTS 7
 
 // These aren't really screens, but its easiest if we just add the
 // action functionality into screens themselves.
@@ -44,6 +45,7 @@ typedef struct
 unsigned int monitor_tests(state_t *state, int reinit);
 unsigned int audio_tests(state_t *state, int reinit);
 unsigned int input_tests(state_t *state, int reinit);
+unsigned int analog_tests(state_t *state, int reinit);
 unsigned int dip_tests(state_t *state, int reinit);
 unsigned int eeprom_tests(state_t *state, int reinit);
 unsigned int sram_tests(state_t *state, int reinit);
@@ -63,9 +65,14 @@ entry_t entries[] = {
         audio_tests,
     },
     {
-        "JVS Input Tests",
+        "JVS Digital Input Tests",
         SCREEN_INPUT_TESTS,
         input_tests,
+    },
+    {
+        "JVS Analog Input Tests",
+        SCREEN_ANALOG_TESTS,
+        analog_tests,
     },
     {
         "Filter Board Input Tests",
@@ -343,7 +350,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
         {
             // Instructions page.
             char *instructions[] = {
-                "Use joystick left/right to move between pages.",
+                "Use digital joystick left/right to move between pages.",
                 "Press start button to exit back to main menu.",
                 "",
                 "Alternatively, use service to move between pages and test to exit.",
@@ -558,7 +565,7 @@ unsigned int audio_tests(state_t *state, int reinit)
 
     // Instructions page.
     char *instructions[] = {
-        "Use joystick left/right to start/stop sound.",
+        "Use digital joystick left/right to start/stop sound.",
         "Press start button to exit back to main menu.",
         "",
         "Alternatively, use service to start/stop sound and test to exit.",
@@ -599,13 +606,218 @@ unsigned int audio_tests(state_t *state, int reinit)
 
 unsigned int input_tests(state_t *state, int reinit)
 {
-    // TODO: Input tests
+    // TODO: Digital input tests
     if (reinit)
     {
     }
 
     // If we need to switch screens.
     unsigned int new_screen = SCREEN_MAIN_MENU;
+
+    return new_screen;
+}
+
+#define ANALOG_MAX_SCREENS 2
+
+unsigned int analog_tests(state_t *state, int reinit)
+{
+    // List of ranges, indexed by player, then by control, then by min/max.
+    static uint8_t ranges[2][4][2];
+    static int screen = 0;
+
+    // Analog input tests. Show current, track full range for each control.
+    if (reinit)
+    {
+        memset(ranges, 0x80, sizeof(ranges));
+        screen = 0;
+    }
+
+    // If we need to switch screens.
+    unsigned int new_screen = SCREEN_ANALOG_TESTS;
+
+    // Grab the current values for each.
+    controls_t controls = get_controls(state, reinit, COMBINED_CONTROLS);
+    uint8_t values[2][4] = {
+        { controls.joy1_v, controls.joy1_h, controls.joy1_a3, controls.joy1_a4 },
+        { controls.joy2_v, controls.joy2_h, controls.joy2_a3, controls.joy2_a4 },
+    };
+
+    for (int player = 0; player < 2; player++)
+    {
+        for (int control = 0; control < 4; control++)
+        {
+            if (values[player][control] < ranges[player][control][0])
+            {
+                ranges[player][control][0] = values[player][control];
+            }
+            if (values[player][control] > ranges[player][control][1])
+            {
+                ranges[player][control][1] = values[player][control];
+            }
+        }
+    }
+
+    if (controls.test_pressed || controls.start_pressed)
+    {
+        // Exit out of the analog test screen.
+        new_screen = SCREEN_MAIN_MENU;
+    }
+    else if (controls.right_pressed || controls.service_pressed)
+    {
+        audio_play_registered_sound(state->sounds.scroll, SPEAKER_LEFT | SPEAKER_RIGHT, 1.0);
+
+        screen ++;
+        if (screen >= ANALOG_MAX_SCREENS) { screen = 0; }
+    }
+    else if (controls.left_pressed)
+    {
+        audio_play_registered_sound(state->sounds.scroll, SPEAKER_LEFT | SPEAKER_RIGHT, 1.0);
+
+        screen --;
+        if (screen < 0) { screen = (ANALOG_MAX_SCREENS - 1); }
+    }
+
+    // Display instructions.
+    char *instructions[] = {
+        "Use digital joystick left/right or service to change screen.",
+        "",
+        "Press either start or test to exit.",
+    };
+
+    for (int i = 0; i < sizeof(instructions) / sizeof(instructions[0]); i++)
+    {
+        font_metrics_t metrics = font_get_text_metrics(state->font_12pt, instructions[i]);
+        ta_draw_text((video_width() - metrics.width) / 2, 22 + (14 * i), state->font_12pt, rgb(255, 255, 255), instructions[i]);
+    }
+
+    switch (screen)
+    {
+        case 0:
+        {
+            // Joystic view, displaying only current values for X/Y.
+            // Draw 1P and 2P joysticks as a box representation.
+            int joy1left = 64;
+            int joy2left = joy1left + 270;
+            int joy1top = 128 + 24;
+            int joy2top = joy1top;
+
+            if (video_is_vertical())
+            {
+                joy2left = joy1left;
+                joy2top = joy1top + 270 + 24 + 24;
+            }
+
+            // Draw labels.
+            font_metrics_t metrics = font_get_text_metrics(state->font_18pt, "1P Joystick");
+            ta_draw_text(joy1left + (257 - metrics.width) / 2, joy1top - 24, state->font_18pt, rgb(255, 255, 255), "1P Joystick");
+            metrics = font_get_text_metrics(state->font_18pt, "2P Joystick");
+            ta_draw_text(joy2left + (257 - metrics.width) / 2, joy2top - 24, state->font_18pt, rgb(255, 255, 255), "2P Joystick");
+
+            // First draw the outline and inner motion section.
+            ta_draw_rectangle(joy1left, joy1top, joy1left + 255 + 2, joy1top + 255 + 2, rgb(255, 255, 255));
+            ta_draw_rectangle(joy2left, joy2top, joy2left + 255 + 2, joy2top + 255 + 2, rgb(255, 255, 255));
+            ta_draw_rectangle(joy1left + 1, joy1top + 1, joy1left + 255 + 1, joy1top + 255 + 1, rgb(64, 64, 64));
+            ta_draw_rectangle(joy2left + 1, joy2top + 1, joy2left + 255 + 1, joy2top + 255 + 1, rgb(64, 64, 64));
+
+            // Now draw an outline for the min/max of each axis.
+            ta_draw_rectangle(
+                joy1left + 1 + ranges[0][1][0],
+                joy1top + 1 + ranges[0][0][0],
+                joy1left + 1 + ranges[0][1][1],
+                joy1top + 1 + ranges[0][0][1],
+                rgb(64, 192, 64)
+            );
+            ta_draw_rectangle(
+                joy2left + 1 + ranges[1][1][0],
+                joy2top + 1 + ranges[1][0][0],
+                joy2left + 1 + ranges[1][1][1],
+                joy2top + 1 + ranges[1][0][1],
+                rgb(64, 192, 64)
+            );
+
+            // Now draw a square for the current location of the joystick.
+            ta_draw_rectangle(
+                joy1left + 1 + values[0][1] - 15,
+                joy1top + 1 + values[0][0] - 15,
+                joy1left + 1 + values[0][1] + 15,
+                joy1top + 1 + values[0][0] + 15,
+                rgb(255, 255, 255)
+            );
+            ta_draw_rectangle(
+                joy2left + 1 + values[1][1] - 15,
+                joy2top + 1 + values[1][0] - 15,
+                joy2left + 1 + values[1][1] + 15,
+                joy2top + 1 + values[1][0] + 15,
+                rgb(255, 255, 255)
+            );
+
+            // Draw current values.
+            metrics = font_get_text_metrics(state->font_18pt, "H: %02X, V: %02X", values[0][1], values[0][0]);
+            ta_draw_text(joy1left + (257 - metrics.width) / 2, joy1top + 260, state->font_18pt, rgb(255, 255, 255), "H: %02X, V: %02X", values[0][1], values[0][0]);
+            metrics = font_get_text_metrics(state->font_18pt, "H: %02X, V: %02X", values[1][1], values[1][0]);
+            ta_draw_text(joy2left + (257 - metrics.width) / 2, joy2top + 260, state->font_18pt, rgb(255, 255, 255), "H: %02X, V: %02X", values[1][1], values[1][0]);
+
+            break;
+        }
+        case 1:
+        {
+            // Analog range view, for pedals/steering/etc.
+            // Draw 1P and 2P joysticks as a box representation.
+            int joyleft[2] = { 64 };
+            joyleft[1] = joyleft[0] + 270;
+            int joytop[2] = { 128 + 24 };
+            joytop[1] = joytop[0];
+
+            if (video_is_vertical())
+            {
+                joyleft[1] = joyleft[0];
+                joytop[1] = joytop[0] + 270 + 24 + 24;
+            }
+
+            for (int player = 0; player < 2; player++)
+            {
+                // Draw labels.
+                font_metrics_t metrics = font_get_text_metrics(state->font_18pt, "%dP Analog", player + 1);
+                ta_draw_text(joyleft[player] + (257 - metrics.width) / 2, joytop[player] - 24, state->font_18pt, rgb(255, 255, 255), "%dP Analog", player + 1);
+
+                for (int control = 0; control < 4; control++)
+                {
+                    int left = joyleft[player] + (64 * control);
+                    int right = left + 56;
+                    int top = joytop[player];
+                    int bottom = top + 257;
+
+                    // First draw the control itself.
+                    ta_draw_rectangle(left, top, right, bottom, rgb(255, 255, 255));
+                    ta_draw_rectangle(left + 1, top + 1, right - 1, bottom - 1, rgb(64, 64, 64));
+
+                    // Now, draw the outline of min/max range.
+                    ta_draw_rectangle(
+                        left + 1,
+                        top + 1 + ranges[player][control][0],
+                        right - 1,
+                        top + 1 + ranges[player][control][1],
+                        rgb(64, 192, 64)
+                    );
+
+                    // Now, draw a slider displaying where the control is.
+                    ta_draw_rectangle(
+                        left + 1,
+                        top + values[player][control],
+                        right - 1,
+                        top + 2 + values[player][control],
+                        rgb(255, 255, 255)
+                    );
+
+                    // Draw current value.
+                    metrics = font_get_text_metrics(state->font_18pt, "%02X", values[player][control]);
+                    ta_draw_text((left + right - metrics.width) / 2, bottom + 2, state->font_18pt, rgb(255, 255, 255), "%02X", values[player][control]);
+                }
+            }
+
+            break;
+        }
+    }
 
     return new_screen;
 }
@@ -1303,6 +1515,7 @@ unsigned int system_menu(state_t *state, int reinit)
 
 unsigned int reboot_system(state_t *state, int reinit)
 {
+    // This doesn't seem to work on Demul, but it works on real hardware.
     call_unmanaged((void (*)())0xA0000000);
     return SCREEN_REBOOT_SYSTEM;
 }
