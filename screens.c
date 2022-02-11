@@ -271,7 +271,7 @@ unsigned int main_menu(state_t *state, int reinit)
 }
 
 // Number of different test screens, the first being the instructions.
-#define MONITOR_TEST_SCREENS 7
+#define MONITOR_TEST_SCREENS 8
 
 // The number of steps (individual color areas on each gradient).
 #define GRADIENT_STEPS 24
@@ -350,7 +350,8 @@ unsigned int monitor_tests(state_t *state, int reinit)
                 "Page 1 is a pure white screen for white balance adjustments.",
                 "Page 2-4 are pure red/green/blue for purity adjustments.",
                 "Page 5 is a gradient for individual gain/bias adjustments.",
-                "Page 6 is a cross hatch for focus and convergence adjustments.",
+                "Page 6 is a white cross hatch for focus and green/magenta convergence adjustments.",
+                "Page 7 is a magenta cross hatch for red/blue convergence adjustments.",
             };
 
             for (int i = 0; i < sizeof(instructions) / sizeof(instructions[0]); i++)
@@ -430,6 +431,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
             break;
         }
         case 6:
+        case 7:
         {
             // Cross hatch pattern, for convergence and focus adjustments.
             int chors = video_is_vertical() ? CROSS_VERTICAL_STEPS : CROSS_HORIZONTAL_STEPS;
@@ -445,6 +447,16 @@ unsigned int monitor_tests(state_t *state, int reinit)
 
             int accum = 0;
             int bump = 0;
+            color_t rgbcolor;
+
+            if (screen == 6)
+            {
+                rgbcolor = rgb(255, 255, 255);
+            }
+            else if (screen == 7)
+            {
+                rgbcolor = rgb(255, 0, 255);
+            }
 
             for (int hloc = 0; hloc < (chors + 1); hloc++)
             {
@@ -460,7 +472,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
                     accum -= chors;
                 }
 
-                sprite_draw_box(left + bump, top, right + bump, bottom, rgb(255, 255, 255));
+                sprite_draw_box(left + bump, top, right + bump, bottom, rgbcolor);
             }
 
             accum = 0;
@@ -480,7 +492,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
                     accum -= cvers;
                 }
 
-                sprite_draw_box(left, top + bump, right, bottom + bump, rgb(255, 255, 255));
+                sprite_draw_box(left, top + bump, right, bottom + bump, rgbcolor);
             }
 
             break;
