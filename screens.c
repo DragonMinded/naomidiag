@@ -271,7 +271,7 @@ unsigned int main_menu(state_t *state, int reinit)
 }
 
 // Number of different test screens, the first being the instructions.
-#define MONITOR_TEST_SCREENS 8
+#define MONITOR_TEST_SCREENS 9
 
 // The number of steps (individual color areas on each gradient).
 #define GRADIENT_STEPS 24
@@ -348,10 +348,18 @@ unsigned int monitor_tests(state_t *state, int reinit)
                 "Alternatively, use service to move between pages and test to exit.",
                 "",
                 "Page 1 is a pure white screen for white balance adjustments.",
+                "",
                 "Page 2-4 are pure red/green/blue for purity adjustments.",
+                "",
                 "Page 5 is a gradient for individual gain/bias adjustments.",
-                "Page 6 is a white cross hatch for focus and green/magenta convergence adjustments.",
+                "",
+                "Page 6 is a white cross hatch for focus and green/magenta",
+                "convergence adjustments.",
+                "",
                 "Page 7 is a magenta cross hatch for red/blue convergence adjustments.",
+                "",
+                "Page 8 is a white cross hatch with red borders, for adjusting",
+                "the position of the yoke.",
             };
 
             for (int i = 0; i < sizeof(instructions) / sizeof(instructions[0]); i++)
@@ -432,8 +440,9 @@ unsigned int monitor_tests(state_t *state, int reinit)
         }
         case 6:
         case 7:
+        case 8:
         {
-            // Cross hatch pattern, for convergence and focus adjustments.
+            // Cross hatch pattern, for convergence and focus adjustments, as well as yoke adjustment.
             int chors = video_is_vertical() ? CROSS_VERTICAL_STEPS : CROSS_HORIZONTAL_STEPS;
             int cvers = video_is_vertical() ? CROSS_HORIZONTAL_STEPS : CROSS_VERTICAL_STEPS;
 
@@ -447,23 +456,12 @@ unsigned int monitor_tests(state_t *state, int reinit)
 
             int accum = 0;
             int bump = 0;
-            color_t rgbcolor;
-
-            if (screen == 6)
-            {
-                rgbcolor = rgb(255, 255, 255);
-            }
-            else if (screen == 7)
-            {
-                rgbcolor = rgb(255, 0, 255);
-            }
+            int hlocs[chors + 1];
+            int vlocs[cvers + 1];
 
             for (int hloc = 0; hloc < (chors + 1); hloc++)
             {
                 int left = hloc * hjump;
-                int right = left + CROSS_WEIGHT;
-                int top = 0;
-                int bottom = video_height();
 
                 accum += herror;
                 while (accum >= chors)
@@ -472,7 +470,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
                     accum -= chors;
                 }
 
-                sprite_draw_box(left + bump, top, right + bump, bottom, rgbcolor);
+                hlocs[hloc] = left + bump;
             }
 
             accum = 0;
@@ -480,10 +478,7 @@ unsigned int monitor_tests(state_t *state, int reinit)
 
             for (int vloc = 0; vloc < (cvers + 1); vloc++)
             {
-                int left = 0;
-                int right = video_width();
                 int top = vloc * vjump;
-                int bottom = top + CROSS_WEIGHT;
 
                 accum += verror;
                 while (accum >= cvers)
@@ -492,7 +487,93 @@ unsigned int monitor_tests(state_t *state, int reinit)
                     accum -= cvers;
                 }
 
-                sprite_draw_box(left, top + bump, right, bottom + bump, rgbcolor);
+                vlocs[vloc] = top + bump;
+            }
+
+            for (int hloc = 0; hloc < (chors + 1); hloc++)
+            {
+                int left = hlocs[hloc];
+                int right = left + CROSS_WEIGHT;
+
+                if (screen == 6)
+                {
+                    sprite_draw_box(left, 0, right, video_height(), rgb(255, 255, 255));
+                }
+                else if (screen == 7)
+                {
+                    sprite_draw_box(left, 0, right, video_height(), rgb(255, 0, 255));
+                }
+                else if (screen == 8)
+                {
+                    if (hloc == 0 || hloc == chors)
+                    {
+                        sprite_draw_box(left, 0, right, video_height(), rgb(255, 0, 0));
+                    }
+                    else
+                    {
+                        sprite_draw_box(left, 0, right, vlocs[1], rgb(255, 0, 0));
+                        sprite_draw_box(left, vlocs[cvers - 1], right, vlocs[cvers], rgb(255, 0, 0));
+                        sprite_draw_box(left, vlocs[1], right, vlocs[cvers - 1], rgb(255, 255, 255));
+                    }
+                }
+            }
+
+            for (int vloc = 0; vloc < (cvers + 1); vloc++)
+            {
+                int top = vlocs[vloc];
+                int bottom = top + CROSS_WEIGHT;
+
+                if (screen == 6)
+                {
+                    sprite_draw_box(0, top, video_width(), bottom, rgb(255, 255, 255));
+                }
+                else if (screen == 7)
+                {
+                    sprite_draw_box(0, top, video_width(), bottom, rgb(255, 0, 255));
+                }
+                else if (screen == 8)
+                {
+                    if (vloc == 0 || vloc == cvers)
+                    {
+                        sprite_draw_box(0, top, video_width(), bottom, rgb(255, 0, 0));
+                    }
+                    else
+                    {
+                        sprite_draw_box(0, top, hlocs[1], bottom, rgb(255, 0, 0));
+                        sprite_draw_box(hlocs[chors - 1], top, hlocs[chors], bottom, rgb(255, 0, 0));
+                        sprite_draw_box(hlocs[1], top, hlocs[chors - 1], bottom, rgb(255, 255, 255));
+                    }
+                }
+            }
+
+            for (int hloc = 0; hloc < chors; hloc++)
+            {
+                int hcenter = ((hlocs[hloc] + hlocs[hloc + 1]) / 2) + CROSS_WEIGHT;
+
+                for (int vloc = 0; vloc < cvers; vloc++)
+                {
+                    int vcenter = ((vlocs[vloc] + vlocs[vloc + 1]) / 2) + CROSS_WEIGHT;
+
+                    if (screen == 6)
+                    {
+                        sprite_draw_box(hcenter - 2, vcenter - 2, hcenter + 1, vcenter + 1, rgb(255, 255, 255));
+                    }
+                    else if (screen == 7)
+                    {
+                        sprite_draw_box(hcenter - 2, vcenter - 2, hcenter + 1, vcenter + 1, rgb(255, 0, 255));
+                    }
+                    else if (screen == 8)
+                    {
+                        if (hloc == 0 || hloc == (chors - 1) || vloc == 0 || vloc == (cvers - 1))
+                        {
+                            sprite_draw_box(hcenter - 2, vcenter - 2, hcenter + 1, vcenter + 1, rgb(255, 0, 0));
+                        }
+                        else
+                        {
+                            sprite_draw_box(hcenter - 2, vcenter - 2, hcenter + 1, vcenter + 1, rgb(255, 255, 255));
+                        }
+                    }
+                }
             }
 
             break;
