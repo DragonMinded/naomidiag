@@ -7,6 +7,8 @@ A diagnostic program that can be run on a SEGA Naomi system. Aims to provide bas
 
 If you just want to run this on your naomi, net boot `naomidiag.bin` using your favorite net boot software. If you wish to modify a test or compile from source, first make sure you have https://github.com/DragonMinded/libnaomi set up. Then, activate the libnaomi environment and run `make` to compile a new version. 
 
+You are free to download, compile, play, remix or redistribute the binary or source code for non-commercial purposes only! No warranty is expressed or implied by this repo or any of the code or binaries within it.
+
 Monitor Tests
 -------------
 
